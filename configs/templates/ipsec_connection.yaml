@@ -1,0 +1,18 @@
+kind: ipsec_connection
+metadata:
+  psk: secret
+  initiator: bi-directional
+  admin_state_up: true
+  mtu: 1500
+dependences:
+  - resource: Vpn
+    name: dx
+    dependences:
+      resource: Router
+      name: dx
+
+  - resource: IkePolicy
+  - resource: IpsecPolicy
+  - resource: EndpointGroup
+
+

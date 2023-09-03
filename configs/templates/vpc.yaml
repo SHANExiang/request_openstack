@@ -1,0 +1,27 @@
+resources:
+  network:
+    type: network
+
+  subnet:
+    type: subnet
+    properties:
+      network_id: network
+      cidr: random
+      ip_version: 4
+      host_routes:
+        - destination: 2.2.2.0/24
+          nexthop: 2.2.2.1
+
+  myrouter:
+    type: router
+    properties:
+      external_gateway_info:
+        network_id: local
+        enable_snat: true
+
+  routerInterface:
+    type: router_interface
+    properties:
+      subnet_id: subnet
+      router_id: myrouter
+

@@ -175,6 +175,7 @@ func mergeMaps(map1, map2 map[string]chan internal.Output) map[string]chan inter
 func (p *ProjectRunner) makeReport() {
 	outputs := mergeMaps(p.manager.Neutron.DeleteChannels, p.manager.Cinder.DeleteChannels)
 	outputs = mergeMaps(outputs, p.manager.Nova.DeleteChannels)
+	outputs = mergeMaps(outputs, p.manager.Octavia.DeleteChannels)
 	reporters := make(map[string]reporter)
 	for resourceType, ch := range outputs {
 		totals := len(ch)

@@ -37,6 +37,8 @@ const (
 
 	ProtocolPROXY Protocol = "PROXY"
 	ProtocolHTTP  Protocol = "HTTP"
+	ProtocolTCP   Protocol = "TCP"
+	PING          string = "PING"
 	ProtocolHTTPS Protocol = "HTTPS"
 	// Protocol PROXYV2 requires octavia microversion 2.22
 	ProtocolPROXYV2 Protocol = "PROXYV2"
@@ -766,7 +768,7 @@ type Pool struct {
 	Listeners []struct {
 		Id string `json:"id"`
 	} `json:"listeners"`
-	Members           []interface{} `json:"members"`
+	Members           []Member      `json:"members"`
 	HealthmonitorId   interface{}   `json:"healthmonitor_id"`
 	ProjectId         string        `json:"project_id"`
 	Id                string        `json:"id"`

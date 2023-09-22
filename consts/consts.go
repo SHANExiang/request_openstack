@@ -4,6 +4,15 @@ import (
 	"time"
 )
 
+
+type Action string
+type RuleType string
+type CompareType string
+type LBMethod string
+type Protocol string
+type TLSVersion string
+
+
 const (
     POST                       = "POST"
     PUT                        = "PUT"
@@ -43,6 +52,8 @@ const (
     FLOATINGIPS                = "floatingips"
     FLOATINGIP                 = "floatingip"
     NETWORKFLOATINGIP          = "network:floatingip"
+    PORTFORWARDING             = "port_forwarding"
+    PORTFORWARDINGS            = "port_forwardings"
     SERVER                     = "server"
     AGGREGATE                  = "aggregate"
     ADDHOST                    = "add_host"
@@ -81,9 +92,12 @@ const (
     L7POLICIES                 = "l7policies"
     L7POLICY                   = "l7policy"
     L7RULES                    = "l7rules"
+    L7RULE                     = "l7rule"
     VpcConnections             = "vpc_connections"
     VpcConnection              = "vpc_connection"
     Images                     = "images"
+    Snats                      = "snats"
+    Snat                       = "snat"
 
     ACTIVE                     = "ACTIVE"
     Available                  = "available"

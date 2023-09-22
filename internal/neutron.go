@@ -638,7 +638,7 @@ func (n *Neutron) CreateFloatingIP(opts *entity.CreateFipOpts) string {
     _ = json.Unmarshal(resp, &fip)
 	floatingIpId := fip.Floatingip.Id
 	//cache.RedisClient.SetMap(n.tag + consts.FLOATINGIPS, floatingIpId, fip)
-	log.Println("==============Create FIP success", floatingIpId)
+	log.Printf("==============Create FIP success %+v\n", fip)
 	return floatingIpId
 }
 
@@ -722,6 +722,20 @@ func (n *Neutron) DeleteFloatingips() {
 	log.Println("Floatingips were deleted completely")
 }
 
+// port forwarding
+
+func (n *Neutron) CreatePortForwarding(fipId string, opts *entity.CreatePortForwardingOpts) string {
+	urlSuffix := fmt.Sprintf("%s/%s/%s", consts.FLOATINGIPS, fipId, consts.PORTFORWARDINGS)
+	createBody := opts.ToRequestBody()
+	resp := n.Post(n.headers, urlSuffix, createBody)
+	var pf entity.PortForwardingMap
+	_ = json.Unmarshal(resp, &pf)
+
+	log.Printf("==============Create port forwarding success %+v\n", pf)
+	return pf.PortForwarding.Id
+}
+
+
 // qos policy
 
 func (n *Neutron) CreateQos() string {
@@ -754,21 +768,31 @@ func (n *Neutron) GetQos(qosId string) entity.QosPolicyMap {
 	return qos
 }
 
-func (n *Neutron) CreateBandwidthLimitRule(qosId string) {
+func (n *Neutron) CreateBandwidthLimitRuleIngress(qosId string) {
 	urlSuffix := fmt.Sprintf("qos/policies/%s/bandwidth_limit_rules", qosId)
 	formatter := `{
                       "bandwidth_limit_rule": {
-                          "max_kbps": 1100,
+                          "max_kbps": 10240,
                           "direction": "ingress"
                       }
                    }`
 	reqBody := formatter
 	n.Post(n.headers, urlSuffix, reqBody)
 	log.Println("==============Create bandwidth_limit_rule success")
+}
 
-	//n.SyncMap(n.tag + consts.QOS_POLICIES, qosId, func(s string) interface{} {
-	//	return n.getQos(qosId)
-	//}, nil)
+
+func (n *Neutron) CreateBandwidthLimitRuleEgress(qosId string) {
+	urlSuffix := fmt.Sprintf("qos/policies/%s/bandwidth_limit_rules", qosId)
+	formatter := `{
+                      "bandwidth_limit_rule": {
+                          "max_kbps": 20480,
+                          "direction": "egress"
+                      }
+                   }`
+	reqBody := formatter
+	n.Post(n.headers, urlSuffix, reqBody)
+	log.Println("==============Create bandwidth_limit_rule success")
 }
 
 func (n *Neutron) updateBandwidthLimitRule(qosId string, ruleId string) {
@@ -776,10 +800,6 @@ func (n *Neutron) updateBandwidthLimitRule(qosId string, ruleId string) {
 	reqBody := fmt.Sprintf("{\"bandwidth_limit_rule\": {\"max_kbps\": \"10304\"}}")
 	resp := n.Put(n.headers, urlSuffix, reqBody)
 	log.Println("==============Update bandwidth_limit_rule success", resp)
-
-	//n.SyncMap(n.tag + consts.QOS_POLICIES, qosId, func(s string) interface{} {
-	//	return n.GetQos(qosId)
-	//}, nil)
 }
 
 func (n *Neutron) DeleteBandwidthLimitRules() {
@@ -910,7 +930,7 @@ func (n *Neutron) DeleteMinimumBandwidthRules() {
 func (n *Neutron) CreateQosAndRule() string {
 	qosId := n.CreateQos()
 
-	n.CreateBandwidthLimitRule(qosId)
+	n.CreateBandwidthLimitRuleIngress(qosId)
 	n.CreateDscpMarkingRule(qosId)
 	n.CreateMinimumBandwidthRule(qosId)
 	return qosId
@@ -1382,6 +1402,15 @@ func (n *Neutron) updateFirewallPolicyV1(firewallPolicyId string) map[string]int
 	return firewallPolicy
 }
 
+func (n *Neutron) GistFirewallPolicy(firewallPolicyId string) entity.FirewallPolicy {
+	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s", firewallPolicyId)
+	resp := n.List(n.headers, urlSuffix)
+	var firewallPolicy entity.FirewallPolicy
+	_ = json.Unmarshal(resp, &firewallPolicy)
+	log.Printf("==============Get firewall policy success %+v\n", firewallPolicy)
+	return firewallPolicy
+}
+
 func (n *Neutron) listFirewallPoliciesV1() entity.FirewallPolicies {
 	urlSuffix := fmt.Sprintf("fw/firewall_policies?project_id=%s", n.projectId)
 	resp := n.List(n.headers, urlSuffix)
@@ -1483,7 +1512,7 @@ func (n *Neutron) listFirewallRulesV1() entity.FirewallRules {
 	return firewallRules
 }
 
-func (n *Neutron) deleteFirewallRuleV1(id string) Output {
+func (n *Neutron) DeleteFirewallRuleV1(id string) Output {
 	outputObj := Output{ParametersMap: map[string]string{"firewall_rule_id": id}}
 	defer func() {
 		if err := recover(); err != nil {
@@ -1504,7 +1533,7 @@ func (n *Neutron) DeleteFirewallRules() {
 	for _, rule := range rules.Frs {
 		tempRule := rule
 		go func() {
-			ch <- n.deleteFirewallRuleV1(tempRule.Id)
+			ch <- n.DeleteFirewallRuleV1(tempRule.Id)
 		}()
 	}
 	if len(ch) != cap(ch) {
@@ -2278,4 +2307,57 @@ func (n *Neutron) ListServiceProviders() {
 	urlSuffix := "service-providers"
 	resp := n.List(n.headers, urlSuffix)
 	log.Println(string(resp))
+}
+
+// SNAT
+
+func (n *Neutron) CreateSnat(opts *entity.Snat) entity.SnatMap {
+	urlSuffix := consts.Snats
+	createBody := opts.ToRequestBody()
+	resp := n.Post(n.headers, urlSuffix, createBody)
+	var snat entity.SnatMap
+	_ = json.Unmarshal(resp, &snat)
+
+	log.Printf("==============Create snat success %+v\n", snat)
+	return snat
+}
+
+func (n *Neutron) ListSnats() entity.Snats {
+	urlSuffix := fmt.Sprintf("snats?project_id=%s", n.projectId)
+	resp := n.List(n.headers, urlSuffix)
+	var snats entity.Snats
+	_ = json.Unmarshal(resp, &snats)
+	log.Println("==============List snats success, there had", len(snats.Ss))
+	return snats
+}
+
+func (n *Neutron) DeleteSnat(snatId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"network_id": snatId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
+			outputObj.Response = err
+		}
+	}()
+
+	urlSuffix := fmt.Sprintf("snats/%s", snatId)
+	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	return outputObj
+}
+
+func (n *Neutron) DeleteSnats() {
+	snats := n.ListSnats()
+	ch := n.MakeDeleteChannel(consts.Snat, len(snats.Ss))
+
+	for _, snat := range snats.Ss {
+		temp := snat
+		go func() {
+			ch <- n.DeleteSnat(temp.Id)
+		}()
+	}
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	log.Println("Snats were deleted completely")
 }

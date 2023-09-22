@@ -52,6 +52,7 @@ type CreateNetworkOpts struct {
 	TenantID              string   `json:"tenant_id,omitempty"`
 	ProjectID             string   `json:"project_id,omitempty"`
 	AvailabilityZoneHints []string `json:"availability_zone_hints,omitempty"`
+	RouterExternal        bool     `json:"router:external,omitempty"`
 }
 
 func (opts *CreateNetworkOpts) ToRequestBody() string {

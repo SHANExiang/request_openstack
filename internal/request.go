@@ -77,7 +77,7 @@ func NewSSLClient() (client *fasthttp.Client) {
 			DNSCacheDuration: time.Hour,
 		}).Dial,
 		TLSConfig: &tls.Config{
-			RootCAs:            loadCACert(),
+			//RootCAs:            loadCACert(),
 			InsecureSkipVerify: true,
 		},
 	}

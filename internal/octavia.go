@@ -9,8 +9,22 @@ import (
 	"request_openstack/consts"
 	"request_openstack/internal/entity"
 	"request_openstack/utils"
+	"sync"
 	"time"
 )
+
+var supportedOctaviaResourceTypes = [...]string{
+	consts.LOADBALANCER, consts.LISTENER, consts.POOL, consts.MEMBER,
+	consts.HEALTHMONITOR, consts.L7POLICY, consts.L7RULE,
+}
+
+func initOctaviaOutputChannels() map[string]chan Output {
+	outputChannel := make(map[string]chan Output)
+	for _, resourceType := range supportedOctaviaResourceTypes {
+		outputChannel[resourceType] = make(chan Output, 0)
+	}
+	return outputChannel
+}
 
 type Octavia struct {
 	Request
@@ -18,6 +32,8 @@ type Octavia struct {
 	tag                string
 	snowflake          *utils.Snowflake
 	ExternalNetwork    string
+	DeleteChannels     map[string]chan Output
+	mu                 sync.Mutex
 }
 
 func NewLB(token string, client *fasthttp.Client) *Octavia {
@@ -30,33 +46,49 @@ func NewLB(token string, client *fasthttp.Client) *Octavia {
 		tag: configs.CONF.Host + "_",
 		snowflake: utils.NewSnowflake(uint16(1)),
 		ExternalNetwork: configs.CONF.ExternalNetwork,
+		DeleteChannels: initOctaviaOutputChannels(),
 	}
+}
+
+func (o *Octavia) MakeDeleteChannel(resourceType string, length int) chan Output {
+	defer o.mu.Unlock()
+	o.mu.Lock()
+
+	o.DeleteChannels[resourceType] = make(chan Output, length)
+	return o.DeleteChannels[resourceType]
 }
 
 // load balancer
 
-func (l *Octavia) CreateLoadbalancer(opts entity.CreateLoadbalancerOpts) string {
+func (o *Octavia) CreateLoadbalancer(opts entity.CreateLoadbalancerOpts) string {
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name, consts.LOADBALANCER)
 	urlSuffix := "lbaas/loadbalancers"
 	reqBody := opts.ToRequestBody()
-	resp := l.Post(l.headers, urlSuffix, reqBody)
+	resp := o.Post(o.headers, urlSuffix, reqBody)
 	var lb entity.LoadbalancerMap
 	_ = json.Unmarshal(resp, &lb)
 
 	//cache.RedisClient.SetMap(l.tag + consts.LOADBALANCERS, lb.Loadbalancer.Id, lb)
 
-	l.makeSureLbActive(lb.Loadbalancer.Id)
+	o.makeSureLbActive(lb.Loadbalancer.Id)
 	log.Println("==============create loadbalancer success", lb.Loadbalancer.Id)
 	return lb.Loadbalancer.Id
 }
 
-func (l *Octavia) deleteLoadbalancer(ipId string) {
+func (o *Octavia) deleteLoadbalancer(ipId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"loadbalancer_id": ipId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
+			outputObj.Response = err
+		}
+	}()
+
 	urlSuffix := fmt.Sprintf("lbaas/loadbalancers/%s", ipId)
-	if ok, _ := l.Delete(l.headers, urlSuffix); ok {
-		log.Println("==============Delete loadbalancer success", ipId)
-		return
-	}
-	log.Println("==============Delete loadbalancer failed", ipId)
+	outputObj.Success, outputObj.Response = o.Delete(o.headers, urlSuffix)
+    o.makeSureLbDeleted(ipId)
+	return outputObj
 }
 
 func (l *Octavia) getLoadbalancer(ipId string) entity.LoadbalancerMap {
@@ -72,111 +104,143 @@ func (l *Octavia) ListLoadbalancers() entity.Loadbalancers {
 	resp := l.List(l.headers, urlSuffix)
 	var lbs entity.Loadbalancers
 	_ = json.Unmarshal(resp, &lbs)
-	log.Println("==============List loadbalancers success")
+	log.Println("==============List loadbalancers success, there had", len(lbs.LBs))
 	return lbs
 }
 
-func (l *Octavia) DeleteLoadbalancers() {
-    lbs := l.ListLoadbalancers()
+func (o *Octavia) DeleteLoadbalancers() {
+	lbs := o.ListLoadbalancers()
+	ch := o.MakeDeleteChannel(consts.LOADBALANCER, len(lbs.LBs))
+
 	for _, lb := range lbs.LBs {
-		l.deleteLoadbalancer(lb.Id)
+		tempLb := lb
+		go func() {
+			ch <- o.deleteLoadbalancer(tempLb.Id)
+		}()
 	}
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	log.Println("Loadbalancers were deleted completely")
 }
 
 // listener
 
-func (l *Octavia) CreateListener(opts entity.CreateListenerOpts) string {
+func (o *Octavia) CreateListener(opts entity.CreateListenerOpts) string {
 	urlSuffix := "lbaas/listeners"
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name, consts.LISTENER)
 	reqBody := opts.ToRequestBody()
-	resp := l.Post(l.headers, urlSuffix, reqBody)
+	resp := o.Post(o.headers, urlSuffix, reqBody)
 	var listener entity.ListenerMap
 	_ = json.Unmarshal(resp, &listener)
 
 	//cache.RedisClient.SetMap(l.tag + consts.LISTENERS, listener.Listener.Id, listener)
 
-	l.makeSureLbActive(opts.LoadbalancerID)
+	o.makeSureLbActive(opts.LoadbalancerID)
 	log.Println("==============Create listener success", listener.Listener.Id)
 	return listener.Listener.Id
 }
 
-func (l *Octavia) deleteListener(listener entity.Listener) {
-	urlSuffix := fmt.Sprintf("lbaas/listeners/%s", listener.Id)
-	if ok, _ := l.Delete(l.headers, urlSuffix); ok {
-		for _, lb := range listener.Loadbalancers {
-			l.makeSureLbActive(lb.Id)
+func (o *Octavia) deleteListener(listenerId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"listener_id": listenerId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
 		}
-		log.Println("==============Delete listener success", listener.Id)
-		return
-	}
-	log.Println("==============Delete listener failed", listener.Id)
+	}()
+
+	urlSuffix := fmt.Sprintf("lbaas/listeners/%s", listenerId)
+	outputObj.Success, outputObj.Response = o.Delete(o.headers, urlSuffix)
+	return outputObj
 }
 
-func (l *Octavia) getListener(ipId string) entity.ListenerMap {
+func (o *Octavia) getListener(ipId string) entity.ListenerMap {
 	urlSuffix := fmt.Sprintf("lbaas/listeners/%s", ipId)
-	resp := l.Get(l.headers, urlSuffix)
+	resp := o.Get(o.headers, urlSuffix)
 	var listener entity.ListenerMap
 	_ = json.Unmarshal(resp, &listener)
 	return listener
 }
 
-func (l *Octavia) ListListeners() entity.Listeners {
+func (o *Octavia) ListListeners() entity.Listeners {
 	urlSuffix := "lbaas/listeners"
-	resp := l.List(l.headers, urlSuffix)
+	resp := o.List(o.headers, urlSuffix)
 	var listeners entity.Listeners
 	_ = json.Unmarshal(resp, &listeners)
-	log.Println("==============List listeners success")
+	log.Println("==============List listeners success, there had", len(listeners.Liss))
 	return listeners
 }
 
-func (l *Octavia) DeleteListeners() {
-	listeners := l.ListListeners()
+func (o *Octavia) DeleteListeners() {
+	listeners := o.ListListeners()
+	ch := o.MakeDeleteChannel(consts.LISTENER, len(listeners.Liss))
+
 	for _, listener := range listeners.Liss {
-		l.deleteListener(listener)
+		temp := listener
+		go func() {
+			ch <- o.deleteListener(temp.Id)
+		}()
 	}
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	log.Println("Listeners were deleted completely")
 }
 
-func (l *Octavia) makeSureLbActive(lbId string) entity.LoadbalancerMap {
-	lb := l.getLoadbalancer(lbId)
+func (o *Octavia) makeSureLbActive(lbId string) entity.LoadbalancerMap {
+	lb := o.getLoadbalancer(lbId)
 
     for lb.Loadbalancer.ProvisioningStatus != consts.ACTIVE {
     	time.Sleep(5 * time.Second)
-    	lb = l.getLoadbalancer(lbId)
+    	lb = o.getLoadbalancer(lbId)
 	}
-	//l.SyncMap(l.tag + consts.LOADBALANCERS, lbId, nil, lb)
 	return lb
+}
+
+func (o *Octavia) makeSureLbDeleted(lbId string) {
+	lb := o.getLoadbalancer(lbId)
+	for &lb != nil {
+		time.Sleep(5 * time.Second)
+		lb = o.getLoadbalancer(lbId)
+	}
+	log.Println("*******************Lb was deleted success")
 }
 
 // pool
 
-func (l *Octavia) CreatePool(opts entity.CreatePoolOpts) string {
+func (o *Octavia) CreatePool(opts entity.CreatePoolOpts) string {
 	urlSuffix := "lbaas/pools"
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name, consts.POOL)
 	reqBody := opts.ToRequestBody()
-	resp := l.Post(l.headers, urlSuffix, reqBody)
+	resp := o.Post(o.headers, urlSuffix, reqBody)
 	var pool entity.PoolMap
 	_ = json.Unmarshal(resp, &pool)
 
-	//cache.RedisClient.SetMap(l.tag + consts.POOLS, pool.Pool.Id, pool)
-
-	l.makeSurePoolActive(pool.Pool.Id)
+	o.makeSurePoolActive(pool.Pool.Id)
 	for _, lb := range pool.Pool.Loadbalancers {
-		l.makeSureLbActive(lb.Id)
+		o.makeSureLbActive(lb.Id)
 	}
-	log.Println("==============create pool success", pool.Pool.Id)
+	log.Println("==============Create pool success", pool.Pool.Id)
 	return pool.Pool.Id
 }
 
-func (l *Octavia) deletePool(pool entity.Pool) {
-	urlSuffix := fmt.Sprintf( "lbaas/pools/%s", pool.Id)
-	if ok, _ := l.Delete(l.headers, urlSuffix); ok {
-		for _, lb := range pool.Loadbalancers {
-			l.makeSureLbActive(lb.Id)
+func (o *Octavia) deletePool(poolId string) Output {
+	pool := o.getPool(poolId)
+	outputObj := Output{ParametersMap: map[string]string{"pool_id": poolId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
 		}
-		log.Println("==============Delete pool success", pool.Id)
-		return
+	}()
+
+	urlSuffix := fmt.Sprintf( "lbaas/pools/%s", poolId)
+	outputObj.Success, outputObj.Response = o.Delete(o.headers, urlSuffix)
+	for _, lb := range pool.Loadbalancers {
+		o.makeSureLbActive(lb.Id)
 	}
-	log.Println("==============delete pool failed", pool.Id)
+	return outputObj
 }
 
 func (l *Octavia) getPool(ipId string) entity.PoolMap {
@@ -192,18 +256,26 @@ func (l *Octavia) ListPools() entity.Pools {
 	resp := l.List(l.headers, urlSuffix)
 	var pools entity.Pools
 	_ = json.Unmarshal(resp, &pools)
-	log.Println("==============List pools success")
+	log.Println("==============List pools success, there had", len(pools.Ps))
 	return pools
 }
 
-func (l *Octavia) DeletePools() {
-	pools := l.ListPools()
+func (o *Octavia) DeletePools() {
+	pools := o.ListPools()
+	ch := o.MakeDeleteChannel(consts.POOL, len(pools.Ps))
 	for _, pool := range pools.Ps {
-		for _, member := range pool.Members {
-			l.deletePoolMember(pool, member.(map[string]interface{})["id"].(string))
-		}
-		l.deletePool(pool)
+		//for _, member := range pool.Members {
+		//	o.deletePoolMember(pool, member.(map[string]interface{})["id"].(string))
+		//}
+		temp := pool
+		go func() {
+			ch <- o.deletePool(temp.Id)
+		}()
 	}
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	log.Println("Pool were deleted completely")
 }
 
 func (l *Octavia) makeSurePoolActive(poolId string) entity.PoolMap {
@@ -213,38 +285,42 @@ func (l *Octavia) makeSurePoolActive(poolId string) entity.PoolMap {
 		time.Sleep(5 * time.Second)
 		pool = l.getPool(poolId)
 	}
-	//l.SyncMap(l.tag + consts.POOLS, poolId, nil, pool)
 	return pool
 }
 
 // pool member
 
-func (l *Octavia) CreatePoolMember(poolId string, opts entity.CreateMemberOpts) string {
+func (o *Octavia) CreatePoolMember(poolId string, opts entity.CreateMemberOpts) string {
 	urlSuffix := fmt.Sprintf("lbaas/pools/%s/members", poolId)
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name, consts.POOL)
 	reqBody := opts.ToRequestBody()
-	resp := l.Post(l.headers, urlSuffix, reqBody)
+	resp := o.Post(o.headers, urlSuffix, reqBody)
 	var member entity.MemberMap
 	_ = json.Unmarshal(resp, &member)
 
-	//cache.RedisClient.SetMap(l.tag + consts.MEMBERS, member.Member.Id, member)
+	o.makeSurePoolActive(poolId)
 	log.Println("==============Create member success", member.Member.Id)
-
-	l.makeSurePoolActive(poolId)
 	return member.Member.Id
 }
 
-func (l *Octavia) deletePoolMember(pool entity.Pool, memberId string) {
-	urlSuffix := fmt.Sprintf("lbaas/pools/%s/members/%s", pool.Id, memberId)
-	if ok, _ := l.Delete(l.headers, urlSuffix); ok {
-		l.makeSurePoolActive(pool.Id)
-		for _, lb := range pool.Loadbalancers {
-			l.makeSureLbActive(lb.Id)
+func (o *Octavia) deletePoolMember(pool entity.Pool, memberId string) Output {
+	defer o.mu.Unlock()
+	o.mu.Lock()
+	outputObj := Output{ParametersMap: map[string]string{"member_id": memberId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
 		}
-		log.Println("==============Delete member success", memberId)
-		return
+	}()
+
+	urlSuffix := fmt.Sprintf("lbaas/pools/%s/members/%s", pool.Id, memberId)
+	outputObj.Success, outputObj.Response = o.Delete(o.headers, urlSuffix)
+	o.makeSurePoolActive(pool.Id)
+	for _, lb := range pool.Loadbalancers {
+		o.makeSureLbActive(lb.Id)
 	}
-	log.Println("==============Delete member failed", memberId)
+	return outputObj
 }
 
 func (l *Octavia) getPoolMember(poolId, memberId string) entity.MemberMap {
@@ -255,13 +331,36 @@ func (l *Octavia) getPoolMember(poolId, memberId string) entity.MemberMap {
 	return member
 }
 
-func (l *Octavia) ListPoolMembers(poolId string) entity.Members {
+func (o *Octavia) ListPoolMembers(poolId string) entity.Members {
 	urlSuffix := fmt.Sprintf("lbaas/pools/%s/members", poolId)
-	resp := l.List(l.headers, urlSuffix)
+	resp := o.List(o.headers, urlSuffix)
 	var ms entity.Members
 	_ = json.Unmarshal(resp, &ms)
-	log.Println("==============List pool members success")
+	log.Println("==============List pool members success, there had", len(ms.Ms))
 	return ms
+}
+
+
+func (o *Octavia) DeleteMembers() {
+	pools := o.ListPools()
+	var memberNumber int
+	for _, pool := range pools.Ps {
+		memberNumber += len(pool.Members)
+	}
+	ch := o.MakeDeleteChannel(consts.MEMBER, memberNumber)
+	for _, pool := range pools.Ps {
+		tempPool := pool
+		for _, member := range pool.Members {
+			temp := member
+			go func() {
+				ch <- o.deletePoolMember(tempPool, temp.Id)
+			}()
+		}
+	}
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	log.Println("Pool members were deleted completely")
 }
 
 // health monitor
@@ -274,18 +373,22 @@ func (l *Octavia) CreateHealthMonitor(opts entity.CreateHealthMonitorOpts) strin
 	var healthMonitor entity.HealthMonitorMap
 	_ = json.Unmarshal(resp, &healthMonitor)
 
-	//cache.RedisClient.SetMap(l.tag + consts.HEALTHMONITORS, healthmonitor.Healthmonitor.Id, healthmonitor)
 	log.Println("==============Create health monitor success", healthMonitor.Healthmonitor.Id)
 	return healthMonitor.Healthmonitor.Id
 }
 
-func (l *Octavia) deleteHealthMonitor(healthmonitorId string) {
+func (o *Octavia) deleteHealthMonitor(healthmonitorId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"health_monitor_id": healthmonitorId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
+		}
+	}()
+
 	urlSuffix := fmt.Sprintf("lbaas/healthmonitors/%s", healthmonitorId)
-	if ok, _ := l.Delete(l.headers, urlSuffix); ok {
-		log.Println("==============Delete healthmonitor success", healthmonitorId)
-		return
-	}
-	log.Println("==============Delete healthmonitor failed", healthmonitorId)
+	outputObj.Success, outputObj.Response = o.Delete(o.headers, urlSuffix)
+	return outputObj
 }
 
 func (l *Octavia) getHealthMonitor(healthmonitorId string) entity.HealthMonitorMap {
@@ -301,15 +404,28 @@ func (l *Octavia) ListHealthMonitors() entity.HealthMonitors {
 	resp := l.List(l.headers, urlSuffix)
 	var hms entity.HealthMonitors
 	_ = json.Unmarshal(resp, &hms)
-	log.Println("==============List health monitors success")
+	log.Println("==============List health monitors success, there had", len(hms.HMs))
 	return hms
 }
 
-func (l *Octavia) DeleteHealthMonitors() {
-	healthmonitors := l.ListHealthMonitors()
+func (o *Octavia) DeleteHealthmonitors() {
+	healthmonitors := o.ListHealthMonitors()
+	ch := o.MakeDeleteChannel(consts.HEALTHMONITOR, len(healthmonitors.HMs))
 	for _, healthmonitor := range healthmonitors.HMs {
-		l.deleteHealthMonitor(healthmonitor.Id)
+		temp := healthmonitor
+		go func() {
+			ch <- o.deleteHealthMonitor(temp.Id)
+		}()
 	}
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	for _, healthmonitor := range healthmonitors.HMs {
+		for _, pool := range healthmonitor.Pools {
+			o.makeSurePoolActive(pool.Id)
+		}
+	}
+	log.Println("Health monitors were deleted completely")
 }
 
 // L7 policy
@@ -327,13 +443,18 @@ func (l *Octavia) CreateL7Policy(listenerId string) string {
 	return l7policy.L7Policy.Id
 }
 
-func (l *Octavia) deleteL7Policy(l7policyId string) {
+func (o *Octavia) deleteL7Policy(l7policyId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"l7Policy_id": l7policyId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
+		}
+	}()
+
 	urlSuffix := fmt.Sprintf("lbaas/l7policies/%s", l7policyId)
-	if ok, _ := l.Delete(l.headers, urlSuffix); ok {
-		log.Println("==============Delete l7policy success", l7policyId)
-		return
-	}
-	log.Println("==============Delete l7policy failed", l7policyId)
+	outputObj.Success, outputObj.Response = o.Delete(o.headers, urlSuffix)
+	return outputObj
 }
 
 func (l *Octavia) getL7Policy(l7policyId string) entity.L7PolicyMap {
@@ -349,7 +470,7 @@ func (l *Octavia) ListL7Policies() entity.L7Policies {
 	resp := l.List(l.headers, urlSuffix)
 	var l7ps entity.L7Policies
 	_ = json.Unmarshal(resp, &l7ps)
-	log.Println("==============List l7 policies success")
+	log.Println("==============List l7 policies success, there had", len(l7ps.L7Ps))
 	return l7ps
 }
 
@@ -364,14 +485,20 @@ func (l *Octavia) makeSureL7PolicyActive(l7PolicyId string) entity.L7PolicyMap {
 	return l7Policy
 }
 
-func (l *Octavia) DeleteL7Policies() {
-	l7policies := l.ListL7Policies()
+func (o *Octavia) DeleteL7Policies() {
+	l7policies := o.ListL7Policies()
+	ch := o.MakeDeleteChannel(consts.L7POLICY, len(l7policies.L7Ps))
 	for _, l7policy := range l7policies.L7Ps {
-		for _, rule := range l7policy.Rules {
-			l.deleteL7Rule(l7policy.Id, rule.Id)
-		}
-		l.deleteL7Policy(l7policy.Id)
+		temp := l7policy
+		go func() {
+			ch <- o.deleteL7Policy(temp.Id)
+		}()
 	}
+
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	log.Println("L7 policies were deleted completely")
 }
 
 // L7 rule
@@ -388,20 +515,48 @@ func (l *Octavia) CreateL7Rule(policyId string) string {
 	return l7Rule.Rule.Id
 }
 
-func (l *Octavia) deleteL7Rule(l7PolicyId, l7RuleId string) {
+func (o *Octavia) deleteL7Rule(l7PolicyId, l7RuleId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"l7Rule_id": l7RuleId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
+		}
+	}()
+
 	urlSuffix := fmt.Sprintf("lbaas/l7policies/%s/rules/%s", l7PolicyId, l7RuleId)
-	if ok, _ := l.Delete(l.headers, urlSuffix); ok {
-		l.makeSureL7PolicyActive(l7PolicyId)
-		log.Println("==============Delete l7Rule success", l7RuleId)
-		return
-	}
-	log.Println("==============Delete l7Rule failed", l7RuleId)
+	outputObj.Success, outputObj.Response = o.Delete(o.headers, urlSuffix)
+	return outputObj
 }
 
-func (l *Octavia) getL7Rule(l7PolicyId, l7RuleId string) entity.L7RuleMap {
+func (o *Octavia) getL7Rule(l7PolicyId, l7RuleId string) entity.L7RuleMap {
 	urlSuffix := fmt.Sprintf("lbaas/l7policies/%s/rules/%s", l7PolicyId, l7RuleId)
-	resp := l.Get(l.headers, urlSuffix)
+	resp := o.Get(o.headers, urlSuffix)
 	var l7Rule entity.L7RuleMap
 	_ = json.Unmarshal(resp, &l7Rule)
 	return l7Rule
+}
+
+func (o *Octavia) DeleteL7Rules() {
+	l7policies := o.ListL7Policies()
+	var ruleNumber int
+	for _, policy := range l7policies.L7Ps {
+        ruleNumber += len(policy.Rules)
+	}
+	ch := o.MakeDeleteChannel(consts.L7RULE, ruleNumber)
+	for _, l7policy := range l7policies.L7Ps {
+		tempPolicy := l7policy
+		for _, rule := range l7policy.Rules {
+			temp := rule
+			go func() {
+				ch <- o.deleteL7Rule(tempPolicy.Id, temp.Id)
+			}()
+		}
+	}
+
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {
+		}
+	}
+	log.Println("L7 rules were deleted completely")
 }

@@ -106,7 +106,7 @@ func TestCreateSubnet(t *testing.T) {
 // TestCreateRouter 5. test router
 func TestCreateRouter(t *testing.T) {
     routerId := manager.CreateRouterHelper()
-    manager.SetRouterGatewayHelper(routerId)
+    manager.SetDefaultRouterGatewayHelper(routerId)
     router := manager.GetRouter(routerId)
     if router.Name != DefaultName + "_" + consts.ROUTER || router.Description != DefaultName ||
         router.ExternalGatewayInfo.NetworkId != configs.CONF.ExternalNetwork {
@@ -120,7 +120,7 @@ func TestCreateRouter(t *testing.T) {
 // TestAddRemoveRouterInterface 6. test router interface
 func TestAddRemoveRouterInterface(t *testing.T) {
     routerId := manager.CreateRouterHelper()
-    manager.SetRouterGatewayHelper(routerId)
+    manager.SetDefaultRouterGatewayHelper(routerId)
     netId := manager.CreateNetworkHelper()
 
     gatewayIp1 := "100.100.100.1"
@@ -158,7 +158,7 @@ func TestAddRemoveRouterInterface(t *testing.T) {
 // TestCreateFip 7. test floating ip
 func TestCreateFip(t *testing.T) {
     routerId := manager.CreateRouterHelper()
-    manager.SetRouterGatewayHelper(routerId)
+    manager.SetDefaultRouterGatewayHelper(routerId)
     fipOpts := &entity.CreateFipOpts{
         FloatingNetworkID: configs.CONF.ExternalNetwork,
     }
@@ -221,13 +221,13 @@ func TestCreateVpcConnection(t *testing.T) {
     netId1 := manager.CreateNetworkHelper()
     subnetId1 := manager.CreateSubnetHelper(netId1)
     routerId1 := manager.CreateRouterHelper()
-    manager.SetRouterGatewayHelper(routerId1)
+    manager.SetDefaultRouterGatewayHelper(routerId1)
     manager.AddRouterInterfaceHelper(routerId1, subnetId1)
 
     netId2 := manager.CreateNetworkHelper()
     subnetId2 := manager.CreateSubnetHelper(netId2)
     routerId2 := manager.CreateRouterHelper()
-    manager.SetRouterGatewayHelper(routerId2)
+    manager.SetDefaultRouterGatewayHelper(routerId2)
     manager.AddRouterInterfaceHelper(routerId2, subnetId2)
 
     vpcConnectionId := manager.CreateVpcConnectionHelper(routerId1, routerId2, []string{subnetId1}, []string{subnetId2})

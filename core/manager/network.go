@@ -18,7 +18,7 @@ func (m *Manager) PrivateNetAccessToInternet() {
 	instanceId := m.CreateInstanceHelper(networkId)
 
 	// 4. set SNAT
-    m.SetRouterGatewayHelper(routerId)
+    m.SetDefaultRouterGatewayHelper(routerId)
 
     // 5. create all allow acl, then associate router
     m.CreateFirewallAllAllowAndAssociateRouter(routerId)
@@ -62,7 +62,7 @@ func (m *Manager) InterconnectInDifferentVpcFwEnabled() {
 	networkId1, subnetId1, routerId1 := m.CreateVpc()
 
 	// 3. set local SNAT
-	m.SetRouterGatewayHelper(routerId1)
+	m.SetDefaultRouterGatewayHelper(routerId1)
 
 	// 4. create all allow acl, then associate router
 	m.CreateFirewallAllAllowAndAssociateRouter(routerId1)
@@ -71,7 +71,7 @@ func (m *Manager) InterconnectInDifferentVpcFwEnabled() {
 	networkId2, subnetId2, routerId2 := m.CreateVpc()
 
 	// 6. set peer SNAT
-	m.SetRouterGatewayHelper(routerId2)
+	m.SetDefaultRouterGatewayHelper(routerId2)
 
 	// 7. create all allow acl, then associate router
 	m.CreateFirewallAllAllowAndAssociateRouter(routerId2)
@@ -105,13 +105,13 @@ func (m *Manager) InterconnectInDifferentVpcNoFw() {
 	networkId1, subnetId1, routerId1 := m.CreateVpc()
 
 	// 3. set local SNAT
-	m.SetRouterGatewayHelper(routerId1)
+	m.SetDefaultRouterGatewayHelper(routerId1)
 
 	// 4. create peer vpc
 	networkId2, subnetId2, routerId2 := m.CreateVpc()
 
 	// 5. set peer SNAT
-	m.SetRouterGatewayHelper(routerId2)
+	m.SetDefaultRouterGatewayHelper(routerId2)
 
 	// 6. create local instance
 	m.CreateInstanceHelper(networkId1)
@@ -126,43 +126,89 @@ func (m *Manager) InterconnectInDifferentVpcNoFw() {
 func (m *Manager) LoadbalancerPoolProtocolRR() {
 	// 1. create lb vip network
 	name := "lb_pool__rr"
-	vipNetworkId := m.CreateNetwork(&entity.CreateNetworkOpts{Name: name})
-	vipSubnetId := m.CreateSubnet(&entity.CreateSubnetOpts{Name: name, NetworkID: vipNetworkId})
+	vipNetworkId := m.CreateNetworkHelper()
+	vipSubnetId := m.CreateSubnetHelper(vipNetworkId)
 
-	// 2. create member instance
-	instanceOpts := entity.CreateInstanceOpts{
-		FlavorRef:      configs.CONF.FlavorId,
-		ImageRef:       configs.CONF.ImageId,
-		Networks:       []entity.ServerNet{{UUID: vipNetworkId}},
-		AdminPass:      "Wang.123",
-		SecurityGroups: []entity.ServerSg{{Name: configs.CONF.ProjectName}},
-		Name:           name,
-	}
-	instance1 := m.CreateInstance(&instanceOpts)
-	instance2 := m.CreateInstance(&instanceOpts)
+	//2. create member instance
+	instance1 := m.CreateInstanceHelper(vipNetworkId)
+	instance2 := m.CreateInstanceHelper(vipNetworkId)
+
+	// 3. create lb
+	createLBOpts := entity.CreateLoadbalancerOpts{Name: name, VipSubnetID: vipSubnetId, }
+	lbId := m.CreateLoadbalancer(createLBOpts)
+
+	// 4. create listener
+	createListenerOpts := entity.CreateListenerOpts{
+		Name: name, LoadbalancerID: lbId, Protocol: entity.ProtocolTCP, ProtocolPort: 22}
+	listener1 := m.CreateListener(createListenerOpts)
+
+	// 5. create pool
+	createPoolOpts := entity.CreatePoolOpts{
+		Name: name, ListenerID: listener1,
+		LBMethod: entity.LBMethodRoundRobin,
+		Protocol: entity.ProtocolTCP}
+	pool1 := m.CreatePool(createPoolOpts)
+
+	// 6. create pool member
+	_, ip1 := m.GetInstancePort(instance1)
+	_, ip2 := m.GetInstancePort(instance2)
+	createMemberOpts1 := entity.CreateMemberOpts{
+		Name: name, Address: ip1, SubnetID: vipSubnetId, ProtocolPort: 22, Weight: 2}
+	m.CreatePoolMember(pool1, createMemberOpts1)
+	createMemberOpts2 := entity.CreateMemberOpts{
+		Name: name, Address: ip2, SubnetID: vipSubnetId, ProtocolPort: 22, Weight: 1}
+	m.CreatePoolMember(pool1, createMemberOpts2)
+
+	// 7. create health monitor
+	createHMOpts := entity.CreateHealthMonitorOpts{
+		Name: name, PoolID: pool1, Type: entity.PING,
+		MaxRetries: 5, Timeout: 30, Delay: 5}
+	m.CreateHealthMonitor(createHMOpts)
+}
+
+
+func (m *Manager) LoadbalancerPoolProtocolLeastConnections() {
+	// 1. create lb vip network
+	name := "lb_pool__lc"
+	vipNetworkId := m.CreateNetworkHelper()
+	vipSubnetId := m.CreateSubnetHelper(vipNetworkId)
+
+	//2. create member instance
+	instance1 := m.CreateInstanceHelper(vipNetworkId)
+	instance2 := m.CreateInstanceHelper(vipNetworkId)
 
 	// 3. create lb
 	createLBOpts := entity.CreateLoadbalancerOpts{Name: name, VipSubnetID: vipSubnetId}
 	lbId := m.CreateLoadbalancer(createLBOpts)
 
 	// 4. create listener
-	createListenerOpts := entity.CreateListenerOpts{Name: name, LoadbalancerID: lbId}
+	connLimit := 5
+	createListenerOpts := entity.CreateListenerOpts{
+		Name: name, LoadbalancerID: lbId, Protocol: entity.ProtocolTCP,
+		ProtocolPort: 822, ConnLimit: &connLimit}
 	listener1 := m.CreateListener(createListenerOpts)
 
 	// 5. create pool
-	createPoolOpts := entity.CreatePoolOpts{Name: name, ListenerID: listener1}
+	createPoolOpts := entity.CreatePoolOpts{
+		Name: name, ListenerID: listener1,
+		LBMethod: entity.LBMethodLeastConnections,
+		Protocol: entity.ProtocolTCP}
 	pool1 := m.CreatePool(createPoolOpts)
 
 	// 6. create pool member
 	_, ip1 := m.GetInstancePort(instance1)
 	_, ip2 := m.GetInstancePort(instance2)
-	createMemberOpts1 := entity.CreateMemberOpts{Name: name, Address: ip1, SubnetID: vipSubnetId, ProtocolPort: 22, Weight: 2}
+	createMemberOpts1 := entity.CreateMemberOpts{
+		Name: name, Address: ip1, SubnetID: vipSubnetId, ProtocolPort: 22, Weight: 2}
 	m.CreatePoolMember(pool1, createMemberOpts1)
-	createMemberOpts2 := entity.CreateMemberOpts{Name: name, Address: ip2, SubnetID: vipSubnetId, ProtocolPort: 22, Weight: 1}
+	createMemberOpts2 := entity.CreateMemberOpts{
+		Name: name, Address: ip2, SubnetID: vipSubnetId, ProtocolPort: 22, Weight: 1}
 	m.CreatePoolMember(pool1, createMemberOpts2)
 
 	// 7. create health monitor
-	createHMOpts := entity.CreateHealthMonitorOpts{Name: name, PoolID: pool1}
+	createHMOpts := entity.CreateHealthMonitorOpts{
+		Name: name, PoolID: pool1, Type: entity.PING,
+		MaxRetries: 5, Timeout: 30, Delay: 5}
 	m.CreateHealthMonitor(createHMOpts)
 }
 
@@ -205,4 +251,40 @@ func (m *Manager) CreateRDSSecurityGroup() {
     m.CreateSecurityGroupRule(ruleOpts9100.ToRequestBody())
     m.CreateSecurityGroupRule(ruleOpts9104.ToRequestBody())
     m.CreateSecurityGroupRule(ruleOpts3300.ToRequestBody())
+}
+
+func (m *Manager) FipQosLimit() {
+	netId, _, routerId := m.CreateVpc()
+	m.SetDefaultRouterGatewayHelper(routerId)
+	instanceId := m.CreateInstanceHelper(netId)
+	instancePortId, _ := m.GetInstancePort(instanceId)
+	fipId := m.CreateFloatingipHelper()
+	m.UpdateFloatingIpWithPort(fipId, instancePortId)
+	fipPortId := m.GetFloatingipPort(fipId)
+	qosId := m.CreateQosPolicyHelper()
+	m.UpdatePortWithQos(fipPortId, qosId)
+}
+
+// FipPortForwarding fip port forwarding
+func (m *Manager) FipPortForwarding() {
+	netId, _, routerId := m.CreateVpc()
+	m.SetDefaultRouterGatewayHelper(routerId)
+	instanceId := m.CreateInstanceHelper(netId)
+	fipId := m.CreateFloatingipHelper()
+	m.CreatePortForwardingHelper(fipId, instanceId)
+}
+
+func (m *Manager) Test()  {
+	internalNetId := m.CreateNetworkHelper()
+	internalSubnetId := m.CreateSubnetHelper(internalNetId)
+	internalRouter := m.CreateRouterHelper()
+	m.AddRouterInterfaceHelper(internalRouter, internalSubnetId)
+
+	externalNetId, externalSubnetId := m.CreateExternalNetwork()
+	adaptorRouterId := m.CreateRouterHelper()
+	m.SetRouterGatewayHelper(internalRouter, externalNetId)
+	m.AddRouterInterfaceHelper(adaptorRouterId, externalSubnetId)
+
+    m.SetDefaultRouterGatewayHelper(adaptorRouterId)
+	m.CreateInstanceHelper(internalNetId)
 }

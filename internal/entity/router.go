@@ -67,7 +67,7 @@ type ExternalFixedIP struct {
 
 type GatewayInfo struct {
 	NetworkID        string            `json:"network_id,omitempty"`
-	EnableSNAT       bool             `json:"enable_snat,omitempty"`
+	EnableSNAT       bool              `json:"enable_snat,omitempty"`
 	ExternalFixedIPs []ExternalFixedIP `json:"external_fixed_ips,omitempty"`
 }
 

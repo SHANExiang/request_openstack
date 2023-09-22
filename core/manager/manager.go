@@ -100,6 +100,13 @@ func (m *Manager) CreateNetworkHelper() string {
 	return netId
 }
 
+func (m *Manager) CreateExternalNetwork() (string, string) {
+	netOpts := &entity.CreateNetworkOpts{Name: "ext_net", RouterExternal: true}
+	netId := m.CreateNetwork(netOpts)
+	subnetId := m.CreateSubnetHelper(netId)
+	return netId, subnetId
+}
+
 func (m *Manager) CreateSubnetHelper(netId string) string {
 	rand.Seed(time.Now().UnixNano())
 	randomNum := rand.Intn(200)
@@ -124,8 +131,17 @@ func (m *Manager) CreateRouterHelper() string {
 	return routerId
 }
 
-func (m *Manager) SetRouterGatewayHelper(routerId string) {
-	updateRouterOpts := &entity.UpdateRouterOpts{GatewayInfo: &entity.GatewayInfo{NetworkID: configs.CONF.ExternalNetwork}}
+func (m *Manager) SetRouterGatewayHelper(routerId, externalNetId string)  {
+	updateRouterOpts := &entity.UpdateRouterOpts{
+		GatewayInfo: &entity.GatewayInfo{
+			NetworkID: externalNetId}}
+	m.UpdateRouter(routerId, updateRouterOpts)
+}
+
+func (m *Manager) SetDefaultRouterGatewayHelper(routerId string) {
+	updateRouterOpts := &entity.UpdateRouterOpts{
+		GatewayInfo: &entity.GatewayInfo{
+			NetworkID: configs.CONF.ExternalNetwork}}
 	m.UpdateRouter(routerId, updateRouterOpts)
 }
 
@@ -156,7 +172,8 @@ func (m *Manager) CreateInstanceHelper(netId string) string {
 
 func (m *Manager) CreateQosPolicyHelper() string {
 	qosId := m.CreateQos()
-	m.CreateBandwidthLimitRule(qosId)
+	m.CreateBandwidthLimitRuleIngress(qosId)
+	m.CreateBandwidthLimitRuleEgress(qosId)
 	return qosId
 }
 
@@ -199,6 +216,25 @@ func (m *Manager) CreateFloatingipWithPortHelper(portId string) string {
 	opts := &entity.CreateFipOpts{
 		FloatingNetworkID: configs.CONF.ExternalNetwork, PortID: portId}
 	return m.CreateFloatingIP(opts)
+}
+
+func (m *Manager) CreateSnatHelper(routerId string) {
+	opts := &entity.Snat{SnatNetworkId: configs.CONF.ExternalNetwork,
+		OriginalCidrs: []string{"192.185.185.0/24"}, TenantId: "48ad435f0e8c44598d3236acdbb9ca47",
+		RouterId: routerId, SnatIpAddress: "10.50.123.100"}
+	m.CreateSnat(opts)
+}
+
+func (m *Manager) CreatePortForwardingHelper(fipId string, instanceId string) {
+	internalPort, internalIpAddr := m.GetInstancePort(instanceId)
+	opts := entity.CreatePortForwardingOpts{
+		InternalPortID: internalPort,
+		InternalIPAddress: internalIpAddr,
+		InternalPort: 10000,
+		ExternalPort: 10001,
+		Protocol: consts.ProtocolTCP,
+	}
+	m.CreatePortForwarding(fipId, &opts)
 }
 
 // CleanProjectAndUser delete project and user
@@ -250,7 +286,7 @@ func (m *Manager) FirewallAssociateRoutersHelper(firewallId string, routerIds []
 }
 
 func (m *Manager) CreateFirewallAllAllowAndAssociateRouter(routerId string) string {
-    ruleId := m.CreateFirewallRuleHelper(entity.ProtocolAny, entity.ActionAllow)
+    ruleId := m.CreateFirewallRuleHelper(consts.ProtocolAny, consts.ActionAllow)
     firewallPolicyId := m.CreateFirewallPolicy()
     m.UpdateFirewallPolicyInsertRuleV1(firewallPolicyId, ruleId)
     firewallId := m.CreateFirewallHelper(firewallPolicyId)
@@ -258,9 +294,18 @@ func (m *Manager) CreateFirewallAllAllowAndAssociateRouter(routerId string) stri
     return firewallId
 }
 
+func (m *Manager) CreateFirewallAllDenyAndAssociateRouter(routerId string) string {
+	ruleId := m.CreateFirewallRuleHelper(consts.ProtocolAny, consts.ActionDeny)
+	firewallPolicyId := m.CreateFirewallPolicy()
+	m.UpdateFirewallPolicyInsertRuleV1(firewallPolicyId, ruleId)
+	firewallId := m.CreateFirewallHelper(firewallPolicyId)
+	m.FirewallAssociateRoutersHelper(firewallId, []string{routerId})
+	return firewallId
+}
+
 func (m *Manager) CreateFirewallRuleAllowSSH() string {
-	allowAnyRuleOpts := &entity.CreateFirewallRuleOpts{Name: DefaultName, Protocol: entity.ProtocolTCP,
-		Action: entity.ActionAllow, SourcePort: "22", DestinationPort: "22"}
+	allowAnyRuleOpts := &entity.CreateFirewallRuleOpts{Name: DefaultName, Protocol: consts.ProtocolTCP,
+		Action: consts.ActionAllow, SourcePort: "22", DestinationPort: "22"}
 	ruleId := m.CreateFirewallRuleV1(allowAnyRuleOpts)
 	return ruleId
 }
@@ -268,14 +313,43 @@ func (m *Manager) CreateFirewallRuleAllowSSH() string {
 func (m *Manager) CreateFirewallRuleDenySnat(sourceIpAddress, destIpAddress string) string {
 	opts := &entity.CreateFirewallRuleOpts{
 		Name: DefaultName,
-		Action: entity.ActionDeny,
-		Protocol: entity.ProtocolAny,
+		Action: consts.ActionDeny,
+		Protocol: consts.ProtocolAny,
 		SourceIPAddress: sourceIpAddress,
 		DestinationIPAddress: destIpAddress,
 		IPVersion: 4,
 	}
 	ruleId := m.CreateFirewallRuleV1(opts)
 	return ruleId
+}
+
+func (m *Manager) CreateFirewallRuleAllowSnat(vpcCidr string) string {
+	opts := &entity.CreateFirewallRuleOpts{
+		Name: DefaultName,
+		Action: consts.ActionAllow,
+		Protocol: consts.ProtocolAny,
+		SourceIPAddress: vpcCidr,
+		IPVersion: 4,
+	}
+	ruleId := m.CreateFirewallRuleV1(opts)
+	return ruleId
+}
+
+func (m *Manager) CreateFirewallRuleAllowDnat(vpcCidr string) string {
+	opts := &entity.CreateFirewallRuleOpts{
+		Name: DefaultName,
+		Action: consts.ActionAllow,
+		Protocol: consts.ProtocolAny,
+		DestinationIPAddress: vpcCidr,
+		IPVersion: 4,
+	}
+	ruleId := m.CreateFirewallRuleV1(opts)
+	return ruleId
+}
+
+func (m *Manager) CreateLoadbalancerHelper(vipSubnetId string) string {
+	createLBOpts := entity.CreateLoadbalancerOpts{VipSubnetID: vipSubnetId}
+	return m.CreateLoadbalancer(createLBOpts)
 }
 
 // CreateVpnIpsecConnection the vpcs of two cluster connect with vpn
@@ -302,30 +376,6 @@ func (m *Manager) VpnIpsecConnectionDelete() {
 	//m.DeleteNetworks()
 }
 
-//func (m *Manager) LoadbalancerCreate() {
-//	networkId, subnetId := "562dd566-e3cb-4b03-9622-01dd352ffa62", "7acad10c-4122-4255-9faf-f5fbaf1232f1"
-//
-//	vm1 := m.CreateInstance(networkId)
-//	vm2 := m.CreateInstance(networkId)
-//	//lbId := m.CreateLoadbalancer(subnetId)
-//	//fmt.Println(networkId, lbId)
-//	listener1 := m.CreateListener("ea08287d-05aa-4f5d-9651-6272377748cd")
-//	pool1 := m.CreatePool(listener1)
-//	_, ip1 := m.GetInstancePort(vm1)
-//	_, ip2 := m.GetInstancePort(vm2)
-//	m.CreatePoolMember(pool1, subnetId, ip1)
-//	m.CreatePoolMember(pool1, subnetId, ip2)
-//	m.CreateHealthMonitor(pool1)
-//}
-
-func (m *Manager) LoadbalancerDelete() {
-	m.DeleteHealthMonitors()
-	m.DeletePools()
-	m.DeleteListeners()
-	m.DeleteLoadbalancers()
-	m.DeleteServers()
-}
-
 func (m *Manager) SnapshotToImage() {
 	volume := m.CreateVolume()
 	snapshot := m.CreateSnapshot(volume)
@@ -346,3 +396,6 @@ func (m *Manager) Compensate() {
 	m.CreateFirewallPolicyV1(policyOpts)
 }
 
+func (m *Manager) Cre()  {
+
+}

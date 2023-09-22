@@ -28,6 +28,13 @@ var ResourceDependencies = map[string][]string{
 	consts.FIREWALLPOLICY: []string{consts.FIREWALLRULE},
 	consts.FIREWALL: []string{consts.FIREWALLPOLICY, consts.ROUTER},
 	consts.VpcConnection: []string{consts.ROUTERINTERFACE, consts.ROUTERGATEWAY, consts.FIREWALL},
+	consts.LOADBALANCER: []string{consts.SUBNET},
+	consts.LISTENER: []string{consts.LOADBALANCER},
+	consts.POOL: []string{consts.LISTENER},
+	consts.MEMBER: []string{consts.POOL},
+	consts.HEALTHMONITOR: []string{consts.POOL},
+	consts.L7POLICY: []string{},
+	consts.L7RULE: []string{consts.L7POLICY},
 }
 
 var OrderResources = [...]string{
@@ -52,6 +59,13 @@ var OrderResources = [...]string{
 	consts.FIREWALLPOLICY,
 	consts.FIREWALL,
 	consts.VpcConnection,
+	consts.LOADBALANCER,
+	consts.LISTENER,
+	consts.POOL,
+	consts.MEMBER,
+	consts.HEALTHMONITOR,
+	consts.L7POLICY,
+	consts.L7RULE,
 }
 
 type Dependency struct {

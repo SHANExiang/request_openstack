@@ -40,7 +40,6 @@ func (m *Manager) CreateInstanceForTest() {
 		}},
 	}
 	m.CreateInstance(&instanceOpts)
-	m.CreateInstance(&instanceOpts)
 }
 
 func (m *Manager) GetInstancesSysDisk(instanceId string) string {

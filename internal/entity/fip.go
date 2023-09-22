@@ -106,3 +106,34 @@ func (opts *CreateFipOpts) AssignProps(props map[string]interface{}) (*CreateFip
 	}
 	return opts, deps
 }
+
+type PortForwardingMap struct {
+	PortForwarding struct {
+		Protocol          string `json:"protocol"`
+		InternalIpAddress string `json:"internal_ip_address"`
+		InternalPort      int    `json:"internal_port"`
+		InternalPortId    string `json:"internal_port_id"`
+		ExternalPort      int    `json:"external_port"`
+		Description       string `json:"description"`
+		Id                string `json:"id"`
+	} `json:"port_forwarding"`
+}
+
+type CreatePortForwardingOpts struct {
+	InternalPortID         string    `json:"internal_port_id"  required:"true"`
+	InternalIPAddress      string    `json:"internal_ip_address"  required:"true"`
+	Protocol               string    `json:"protocol" required:"true"`
+	InternalPort           int       `json:"internal_port,omitempty"`
+	InternalPortRange      string    `json:"internal_port_range,omitempty"`
+	ExternalPort           int       `json:"external_port,omitempty"`
+	ExternalPortRange      string    `json:"external_port_range,omitempty"`
+	Description            string    `json:"description,omitempty"`
+}
+
+func (opts *CreatePortForwardingOpts) ToRequestBody() string {
+	reqBody, err := BuildRequestBody(opts, consts.PORTFORWARDING)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to build request body %s", err))
+	}
+	return reqBody
+}

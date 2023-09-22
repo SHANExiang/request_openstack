@@ -37,7 +37,7 @@ func (s *SDN) GetSDNToken() string {
     resp := s.Post(s.headers, urlSuffix, reqBody)
     var sdnToken entity.SDNToken
     _ = json.Unmarshal(resp, &sdnToken)
-    log.Println("==============Get SDN token success")
+    log.Println("==============Get SDN token success", sdnToken.Data.TokenId)
     return sdnToken.Data.TokenId
 }
 
@@ -57,15 +57,13 @@ func (s *SDN) ListSDNNetworks() {
 func (s *SDN) GetSDNLogicNetworks() {
 	urlSuffix := "controller/dc/v3/logicnetwork/networks"
 	resp := s.List(s.headers, urlSuffix)
-	log.Println(string(resp))
-	log.Println("==============List SDN networks success")
+	log.Println("==============List SDN networks success", string(resp))
 }
 
 func (s *SDN) GetSDNLogicRouters() {
 	urlSuffix := "controller/dc/v3/logicnetwork/routers"
 	resp := s.List(s.headers, urlSuffix)
-	log.Println(string(resp))
-	log.Println("==============List SDN logic routers success")
+	log.Println("==============List SDN logic routers success", string(resp))
 }
 
 func (s *SDN) CreateSDNVpcConnect() {
@@ -103,3 +101,23 @@ func (s *SDN) GetMDCVpcConnects() {
 	log.Println(string(resp))
 }
 
+func (s *SDN) ListSnats() {
+	urlSuffix := "/controller/dc/v2/neutronapi/snat"
+	resp := s.List(s.headers, urlSuffix)
+	log.Println(string(resp))
+}
+
+func (s *SDN) DeleteRouterGateway() {
+	routerId := "3273a04f-08e9-47b7-90d3-d8ba113d3569"
+	urlSuffix := fmt.Sprintf("/restconf/data/huawei-ac-neutron:neutron-cfg/routers/router/%s", routerId)
+	reqBody := `{
+	"router" : [
+		{
+			"uuid" : "3273a04f-08e9-47b7-90d3-d8ba113d3569",
+            "gateway-port-id": null,
+            "external-gateway-info": {}
+}]}
+`
+	resp := s.Put(s.headers, urlSuffix, reqBody)
+	log.Println(string(resp))
+}

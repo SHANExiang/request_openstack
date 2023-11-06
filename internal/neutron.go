@@ -19,8 +19,8 @@ var supportedNeutronResourceTypes = [...]string{
 	consts.NETWORK, consts.SUBNET, consts.PORT, consts.SECURITYGROUPRULE, consts.SECURITYGROUP,
 	consts.BANDWIDTH_LIMIT_RULE, consts.DSCP_MARKING_RULE, consts.MINIMUM_BANDWIDTH_RULE,
 	consts.QOS_POLICY, consts.ROUTER, consts.ROUTERINTERFACE, consts.ROUTERGATEWAY,
-	consts.ROUTERROUTE, consts.FLOATINGIP, consts.FIREWALLRULE, consts.FIREWALLPOLICY,
-	consts.FIREWALL, consts.VpcConnection,
+	consts.ROUTERROUTE, consts.FLOATINGIP, consts.PORTFORWARDING, consts.FIREWALLRULE,
+	consts.FIREWALLPOLICY, consts.FIREWALL, consts.VpcConnection,
 }
 
 type Neutron struct {
@@ -31,6 +31,7 @@ type Neutron struct {
 	DeleteChannels     map[string]chan Output
 	mu                 sync.Mutex
 	snowflake          *utils.Snowflake
+	isAdmin            bool
 }
 
 func initNeutronOutputChannels() map[string]chan Output {
@@ -57,6 +58,7 @@ func NewNeutron(options ...Option) *Neutron {
 	headers[consts.AuthToken] = opts.Token
 	neutron.headers = headers
 	neutron.snowflake = opts.Snowflake
+	neutron.isAdmin = opts.IsAdmin
 	return neutron
 }
 
@@ -121,7 +123,12 @@ func (n *Neutron) UpdateNetWithQos(netId, qosId string) string {
 }
 
 func (n *Neutron) ListNetworks() entity.Networks {
-	urlSuffix := fmt.Sprintf("networks?project_id=%s", n.projectId)
+	var urlSuffix string
+	if n.isAdmin {
+		urlSuffix = consts.NETWORKS
+	} else {
+		urlSuffix = fmt.Sprintf("networks?project_id=%s", n.projectId)
+	}
 	//urlSuffix := "networks"
 	resp := n.List(n.headers, urlSuffix)
 	var networks entity.Networks
@@ -227,7 +234,12 @@ func (n *Neutron) GetSubnet(subnetId string) entity.SubnetMap {
 }
 
 func (n *Neutron) ListSubnet() entity.Subnets {
-	urlSuffix := fmt.Sprintf("subnets?project_id=%s", n.projectId)
+	var urlSuffix string
+	if n.isAdmin {
+		urlSuffix = consts.SUBNETS
+	} else {
+		urlSuffix = fmt.Sprintf("subnets?project_id=%s", n.projectId)
+	}
 	resp := n.List(n.headers, urlSuffix)
 	var subnets entity.Subnets
 	_ = json.Unmarshal(resp, &subnets)
@@ -273,6 +285,17 @@ func (n *Neutron) DeleteSubnets() {
 }
 
 //port
+
+func (n *Neutron) CreatePort(opts *entity.CreatePortOpts) string {
+	opts.Name = fmt.Sprintf("%s_%s", opts.Name + strconv.FormatUint(n.snowflake.NextVal(), 10), consts.PORT)
+	reqBody := opts.ToRequestBody()
+	resp := n.Post(n.headers, consts.PORTS, reqBody)
+	var port entity.PortMap
+	_ = json.Unmarshal(resp, &port)
+	log.Println("==============Create port success", port.Port.Id)
+	return port.Port.Id
+}
+
 func (n *Neutron) updatePort(portId string, reqBody string) {
 	urlSuffix := fmt.Sprintf("ports/%s", portId)
 	n.Put(n.headers, urlSuffix, reqBody)
@@ -304,6 +327,11 @@ func (n *Neutron) UpdatePortWithQos(portId, qosPolicyId string) {
 	n.updatePort(portId, reqBody)
 }
 
+func (n *Neutron) UpdatePortWithNoQos(portId string) {
+	reqBody := fmt.Sprintf("{\"port\": {\"qos_policy_id\": null}}")
+	n.updatePort(portId, reqBody)
+}
+
 func (n *Neutron) GetPort(portId string) entity.PortMap {
 	urlSuffix := fmt.Sprintf("ports/%s", portId)
 	resp := n.Get(n.headers, urlSuffix)
@@ -313,8 +341,23 @@ func (n *Neutron) GetPort(portId string) entity.PortMap {
 	return port
 }
 
+func (n *Neutron) GetPortIP(portId string) string {
+	urlSuffix := fmt.Sprintf("ports/%s", portId)
+	resp := n.Get(n.headers, urlSuffix)
+	var port entity.PortMap
+	_ = json.Unmarshal(resp, &port)
+	log.Println("==============Get port success", portId)
+	return port.FixedIps[0].IpAddress
+}
+
 func (n *Neutron) ListPort() entity.Ports {
-	urlSuffix := fmt.Sprintf("ports?project_id=%s", n.projectId)
+	var urlSuffix string
+	if n.isAdmin {
+		urlSuffix = consts.PORTS
+	} else {
+		urlSuffix = fmt.Sprintf("ports?project_id=%s", n.projectId)
+	}
+
 	resp := n.Get(n.headers, urlSuffix)
 	var ports entity.Ports
 	_ = json.Unmarshal(resp, &ports)
@@ -439,8 +482,13 @@ func (n *Neutron) DeleteRouterInterfaces() {
 	log.Println("Router interfaces were deleted completely")
 }
 
-func (n *Neutron) listRouters() entity.Routers {
-	urlSuffix := fmt.Sprintf("routers?project_id=%s", n.projectId)
+func (n *Neutron) ListRouters() entity.Routers {
+	var urlSuffix string
+	if n.isAdmin {
+		urlSuffix = consts.ROUTERS
+	} else {
+		urlSuffix = fmt.Sprintf("routers?project_id=%s", n.projectId)
+	}
 	resp := n.List(n.headers, urlSuffix)
 	var routers entity.Routers
 	_ = json.Unmarshal(resp, &routers)
@@ -475,7 +523,7 @@ func (n *Neutron) updateRouterNoRoutes(id string) Output {
 }
 
 func (n *Neutron) DeleteRouterRoutes() {
-	routers := n.listRouters()
+	routers := n.ListRouters()
 	length := 0
 	for _, router := range routers.Rs {
 		if len(router.Routes) != 0 {
@@ -517,7 +565,7 @@ func (n *Neutron) DeleteRouter(routerId string) Output {
 }
 
 func (n *Neutron) DeleteRouters() {
-	routers := n.listRouters()
+	routers := n.ListRouters()
 	ch := n.MakeDeleteChannel(consts.ROUTER, len(routers.Rs))
 	for _, router := range routers.Rs {
 		tempRouter := router
@@ -531,8 +579,8 @@ func (n *Neutron) DeleteRouters() {
 	log.Println("Routers were deleted completely")
 }
 
-func (n *Neutron) clearRouterGateway(routerId, extNetId string) Output {
-	outputObj := Output{ParametersMap: map[string]string{"router_id": routerId}}
+func (n *Neutron) ClearRouterGateway(routerId, extNetId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"router_id": routerId, "ext_net_id": extNetId}}
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("catch error：", err)
@@ -550,18 +598,18 @@ func (n *Neutron) clearRouterGateway(routerId, extNetId string) Output {
 }
 
 func (n *Neutron) DeleteRouterGateways() {
-	routers := n.listRouters()
+	routers := n.ListRouters()
     var length int
 	for _, router := range routers.Rs {
-		if !reflect.DeepEqual(router.ExternalGatewayInfo, nil) {
+		if !reflect.DeepEqual(router.GatewayInfo, nil) {
             length++
 		}
 	}
 		ch := n.MakeDeleteChannel(consts.ROUTERGATEWAY, length)
 	for _, router := range routers.Rs {
-		if !reflect.DeepEqual(router.ExternalGatewayInfo, nil) {
+		if !reflect.DeepEqual(router.GatewayInfo, nil) {
 			go func() {
-				ch <- n.clearRouterGateway(router.Id, router.ExternalGatewayInfo.NetworkId)
+				ch <- n.ClearRouterGateway(router.Id, router.GatewayInfo.NetworkID)
 			}()
 		}
 	}
@@ -620,9 +668,9 @@ func (n *Neutron) getRouterExternalIps(routerId string) []string {
 		router = n.GetRouter(routerId)
 	}
 	var fixedIps = make([]string, 0)
-	if len(router.Router.ExternalGatewayInfo.ExternalFixedIps) != 0 {
-		 for _, fixedip := range router.Router.ExternalGatewayInfo.ExternalFixedIps {
-		 	fixedIps = append(fixedIps, fixedip.IpAddress)
+	if len(router.Router.GatewayInfo.ExternalFixedIPs) != 0 {
+		 for _, fixedip := range router.Router.GatewayInfo.ExternalFixedIPs {
+		 	fixedIps = append(fixedIps, fixedip.IPAddress)
 		 }
 	}
 	return fixedIps
@@ -673,6 +721,16 @@ func (n *Neutron) UpdateFloatingIpWithPort(fipId, portId string) string {
 	return n.UpdateFloatingIp(fipId, reqBody)
 }
 
+func (n *Neutron) UpdateFloatingIpWithPortIpAddress(fipId, portId, fixedIp string) string {
+	reqBody := fmt.Sprintf("{\"floatingip\": {\"port_id\": \"%+v\", \"fixed_ip_address\": \"%+v\"}}", portId, fixedIp)
+	return n.UpdateFloatingIp(fipId, reqBody)
+}
+
+func (n *Neutron) FloatingIpDisassociatePort(fipId string) string {
+	reqBody := fmt.Sprintf("{\"floatingip\": {\"port_id\": null}}")
+	return n.UpdateFloatingIp(fipId, reqBody)
+}
+
 func (n *Neutron) GetFIP(fipId string) entity.FipMap {
 	urlSuffix := fmt.Sprintf("floatingips/%s", fipId)
 	resp := n.Get(n.headers, urlSuffix)
@@ -683,7 +741,12 @@ func (n *Neutron) GetFIP(fipId string) entity.FipMap {
 }
 
 func (n *Neutron) ListFIPs() entity.Fips {
-	urlSuffix := fmt.Sprintf("floatingips?project_id=%s", n.projectId)
+	var urlSuffix string
+	if n.isAdmin {
+		urlSuffix = consts.FLOATINGIPS
+	} else {
+		urlSuffix = fmt.Sprintf("floatingips?project_id=%s", n.projectId)
+	}
 
 	resp := n.List(n.headers, urlSuffix)
 	var fs entity.Fips
@@ -735,6 +798,65 @@ func (n *Neutron) CreatePortForwarding(fipId string, opts *entity.CreatePortForw
 	return pf.PortForwarding.Id
 }
 
+func (n *Neutron) GetPortForwarding(fipId string, pfId string) entity.PortForwardingMap {
+	urlSuffix := fmt.Sprintf("%s/%s/%s/%s", consts.FLOATINGIPS, fipId, consts.PORTFORWARDINGS, pfId)
+	resp := n.Get(n.headers, urlSuffix)
+	var pf entity.PortForwardingMap
+	_ = json.Unmarshal(resp, &pf)
+
+	log.Printf("==============Get port forwarding success %+v\n", pf)
+	return pf
+}
+
+func (n *Neutron) ListPortForwarding(fipId string) entity.PortForwardings {
+	urlSuffix := fmt.Sprintf("%s/%s/%s", consts.FLOATINGIPS, fipId, consts.PORTFORWARDINGS)
+	resp := n.List(n.headers, urlSuffix)
+	var pfs entity.PortForwardings
+	_ = json.Unmarshal(resp, &pfs)
+
+	log.Printf("==============List port forwarding success %+v\n", pfs)
+	return pfs
+}
+
+func (n *Neutron) DeletePortForwarding(fipId string, pfId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"floatingip_id": fipId, "port_forwarding_id": pfId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
+			outputObj.Response = err
+		}
+	}()
+	urlSuffix := fmt.Sprintf("%s/%s/%s/%s", consts.FLOATINGIPS, fipId, consts.PORTFORWARDINGS, pfId)
+	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	return outputObj
+}
+
+func (n *Neutron) DeletePortForwardings() {
+	fips := n.ListFIPs()
+	var pfsMap = make(map[string]entity.PortForwardings)
+	var length int
+	for _, fip := range fips.Fs {
+		tmpPfs := n.ListPortForwarding(fip.Id)
+		pfsMap[fip.Id] = tmpPfs
+		length += len(tmpPfs.Pfs)
+	}
+
+	ch := n.MakeDeleteChannel(consts.PORTFORWARDING, length)
+	for fipId, pfs := range pfsMap {
+		for _, pf := range pfs.Pfs {
+			tmpPf := pf
+			go func() {
+				ch <- n.DeletePortForwarding(fipId, tmpPf.Id)
+			}()
+		}
+	}
+
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	log.Println("Port forwarding were deleted completely")
+}
 
 // qos policy
 
@@ -937,7 +1059,12 @@ func (n *Neutron) CreateQosAndRule() string {
 }
 
 func (n *Neutron) listQoss() entity.QosPolicies {
-	urlSuffix := fmt.Sprintf("qos/policies?project_id=%s", n.projectId)
+	var urlSuffix string
+	if n.isAdmin {
+		urlSuffix =	"qos/policies"
+	} else {
+		urlSuffix = fmt.Sprintf("ports?project_id=%s", n.projectId)
+	}
 	resp := n.List(n.headers, urlSuffix)
 	var qos entity.QosPolicies
 	_ = json.Unmarshal(resp, &qos)
@@ -1011,16 +1138,17 @@ func (n *Neutron) GetInstancePort(instanceId string) (string, string) {
 	return portId, ipAddr
 }
 
-func (n *Neutron) GetFloatingipPort(fipId string) string {
+func (n *Neutron) GetFloatingipPort(fipId string) *entity.Port {
 	urlSuffix := fmt.Sprintf("ports?device_id=%s", fipId)
 	resp := n.List(n.headers, urlSuffix)
 	var ports entity.Ports
 	_ = json.Unmarshal(resp, &ports)
+	log.Println("==============Get floatingip port success for fip=", fipId, string(resp))
 	if len(ports.Ps) != 0 {
 		fipPort := ports.Ps[0]
-		return fipPort.Id
+		return &fipPort
 	}
-	return ""
+	return nil
 }
 
 // firewall group v2
@@ -2327,6 +2455,7 @@ func (n *Neutron) ListSnats() entity.Snats {
 	resp := n.List(n.headers, urlSuffix)
 	var snats entity.Snats
 	_ = json.Unmarshal(resp, &snats)
+	log.Printf("snats==%+v\n", snats)
 	log.Println("==============List snats success, there had", len(snats.Ss))
 	return snats
 }
@@ -2360,4 +2489,56 @@ func (n *Neutron) DeleteSnats() {
 		for len(ch) != cap(ch) {}
 	}
 	log.Println("Snats were deleted completely")
+}
+
+func (n *Neutron) CreateDnat(opts *entity.Dnat) entity.DnatMap {
+	urlSuffix := consts.Dnats
+	createBody := opts.ToRequestBody()
+	resp := n.Post(n.headers, urlSuffix, createBody)
+	var dnat entity.DnatMap
+	_ = json.Unmarshal(resp, &dnat)
+
+	log.Printf("==============Create dnat success %+v\n", dnat)
+	return dnat
+}
+
+func (n *Neutron) ListDnats() entity.Dnats {
+	urlSuffix := fmt.Sprintf("dnats?project_id=%s", n.projectId)
+	resp := n.List(n.headers, urlSuffix)
+	var dnats entity.Dnats
+	_ = json.Unmarshal(resp, &dnats)
+	log.Printf("dnats==%+v\n", dnats)
+	log.Println("==============List snats success, there had", len(dnats.Ds))
+	return dnats
+}
+
+func (n *Neutron) DeleteDnat(dnatId string) Output {
+	outputObj := Output{ParametersMap: map[string]string{"network_id": dnatId}}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("catch error：", err)
+			outputObj.Success = false
+			outputObj.Response = err
+		}
+	}()
+
+	urlSuffix := fmt.Sprintf("dnats/%s", dnatId)
+	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	return outputObj
+}
+
+func (n *Neutron) DeleteDnats() {
+	snats := n.ListDnats()
+	ch := n.MakeDeleteChannel(consts.Dnat, len(snats.Ds))
+
+	for _, snat := range snats.Ds {
+		temp := snat
+		go func() {
+			ch <- n.DeleteDnat(temp.Id)
+		}()
+	}
+	if len(ch) != cap(ch) {
+		for len(ch) != cap(ch) {}
+	}
+	log.Println("Dnats were deleted completely")
 }

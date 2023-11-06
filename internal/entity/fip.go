@@ -107,16 +107,22 @@ func (opts *CreateFipOpts) AssignProps(props map[string]interface{}) (*CreateFip
 	return opts, deps
 }
 
+type PortForwarding struct {
+	Protocol          string `json:"protocol"`
+	InternalIpAddress string `json:"internal_ip_address"`
+	InternalPort      int    `json:"internal_port"`
+	InternalPortId    string `json:"internal_port_id"`
+	ExternalPort      int    `json:"external_port"`
+	Description       string `json:"description"`
+	Id                string `json:"id"`
+}
+
 type PortForwardingMap struct {
-	PortForwarding struct {
-		Protocol          string `json:"protocol"`
-		InternalIpAddress string `json:"internal_ip_address"`
-		InternalPort      int    `json:"internal_port"`
-		InternalPortId    string `json:"internal_port_id"`
-		ExternalPort      int    `json:"external_port"`
-		Description       string `json:"description"`
-		Id                string `json:"id"`
-	} `json:"port_forwarding"`
+	PortForwarding      `json:"port_forwarding"`
+}
+
+type PortForwardings struct {
+	Pfs             []PortForwarding    `json:"port_forwardings"`
 }
 
 type CreatePortForwardingOpts struct {

@@ -3,7 +3,6 @@ package configs
 import (
 	"fmt"
 	"github.com/spf13/viper"
-	"log"
 	"path"
 	"runtime"
 )
@@ -11,6 +10,7 @@ import (
 func Viper() *viper.Viper {
 	v := viper.New()
 	currentPath := getCurrentAbPathByCaller()
+	v.SetConfigFile(currentPath + "\\openstack.yaml")
 	//exePath, err := os.Executable()
 	//if err != nil {
 	//	fmt.Println(err)
@@ -18,11 +18,14 @@ func Viper() *viper.Viper {
 
 	//currentPath := filepath.Dir(exePath)
 
-	//currentPath, _ := os.Getwd()
-	//config = fmt.Sprintf("%s\\configs\\openstack.yaml", currentPath)
 	//config = "C:\\workspace\\codes\\goprojects\\internal\\request_openstack\\configs\\openstack.yaml"
 	//log.Println("config is", config)
-	v.SetConfigFile(currentPath + "\\openstack.yaml")
+
+	// linux path
+	//currentPath, _ := os.Getwd()
+	//config := fmt.Sprintf("%s/openstack.yaml", currentPath)
+	//v.SetConfigFile(config)
+
 	v.SetConfigType("yaml")
 	err := v.ReadInConfig()
 	if err != nil {
@@ -31,7 +34,7 @@ func Viper() *viper.Viper {
 	if err = v.Unmarshal(&CONF); err != nil {
 		fmt.Println(err)
 	}
-	log.Println("CONF", CONF)
+	//log.Println("CONF", CONF)
 	return v
 }
 

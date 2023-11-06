@@ -101,7 +101,8 @@ func (f *File) MarshalJSON() ([]byte, error) {
 }
 
 type ServerNet struct {
-	UUID          string      `json:"uuid"`
+	UUID          string      `json:"uuid,omitempty"`
+	Port          string      `json:"port,omitempty"`
 }
 
 type ServerSg struct {
@@ -364,6 +365,10 @@ type RemoteConsoleMap struct {
 		Type     string `json:"type"`
 		Url      string `json:"url"`
 	} `json:"remote_console"`
+}
+
+type ImageSnapshot struct {
+	ImageId             string       `json:"image_id"`
 }
 
 

@@ -15,6 +15,7 @@ type Options struct {
     Request
     Token                      string
     Snowflake                  *utils.Snowflake
+    IsAdmin                    bool
 }
 
 func WithRequest(uri string, client *fasthttp.Client) Option {
@@ -47,5 +48,11 @@ func WithToken(token string) Option {
 func WithSnowFlake() Option {
     return func(opts *Options) {
         opts.Snowflake = utils.NewSnowflake(uint16(1))
+    }
+}
+
+func WithIsAdmin(isAdmin bool) Option {
+    return func(opts *Options) {
+        opts.IsAdmin = isAdmin
     }
 }

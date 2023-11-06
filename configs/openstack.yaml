@@ -1,17 +1,105 @@
 # openstack keystone
 
 SDN:
-  SDNHost: 
-  SDNUserName: 
-  SDNPassword: 
+#  SDNHost: 10.50.90.2
+  SDNHost: 10.244.8.1
+  SDNUserName: ops@huawei.com
+#  SDNPassword: Xsy@2023
+#  SDNPassword: Sinerecloud@2023
+  SDNPassword: hda_4gIweRu4
 
-##
+## cn-Guizhou-1-A
 Openstack:
-  Host: 
-  AdminPassword: 
-  ProjectName: 
-  UserName: 
-  UserPassword: 
-  ExternalNetwork: 
-  ImageId: 
-  FlavorId: 
+  Host: 10.50.31.1
+  AdminPassword: a01wXH5lN9e2CZFQASe0pBwg2Jqt8lA71ozKSjHJ
+  ProjectName: sdn_test
+  UserName: sdn_test
+  UserPassword: sdn123456
+  ExternalNetwork: e89828f4-21ca-4ebc-a624-7764895b3dc4
+  ImageId: 1cc0701e-5721-4ef2-8e76-e4513ba94387
+  FlavorId: 7dd2a588-3d47-46e2-8faf-73997c532c0e
+
+## cn-Guizhou-1-B
+#Openstack:
+#  Host: 10.50.111.200
+#  AdminPassword: a0gki2OCglotlHk8RbX6dQyM2lr8LHwwui0P6x45
+
+## cn-Guizhou-1-C
+#Openstack:
+#  Host: 10.50.1.251
+#  AdminPassword: a0d3ekDeyUmv4zDlvJvYqFFBvEtq8yhXMv9SOJ00
+#  ProjectName: sdn_test
+#  UserName: sdn_test
+#  UserPassword: sdn123456
+#  ExternalNetwork: 2a6d66f9-9ad6-4cf0-b633-8e3f4130a107
+#  ImageId: 116c139e-7f1d-4b84-836e-0e553618e952
+#  FlavorId: fdd853c0-a96e-45d4-a657-1f6ce5619f15
+#
+#Openstack:
+#  Host: 10.50.114.112
+#  AdminPassword: a0iVFfQLnIkJRKDlNrnqRWIPuw6dHiolrmztRnl5
+##  ProjectName: sdn_test
+##  UserName: sdn_test
+##  UserPassword: sdn123456
+#  ProjectName: sdn_test
+#  UserName: sdn_test
+#  UserPassword: sdn123456
+#  ExternalNetwork: ef0b753c-f97c-45d5-97a9-e23096736ea3
+#  ImageId: ddd56658-0a29-41e8-a226-0674fbb40a92
+#  FlavorId: 5520a3d6-70fb-495b-a2ee-57d571f70df0
+
+## cn-Guizhou-1-D
+#Openstack:
+#  Host: 10.50.1.200
+#  AdminPassword: a0b2aQkGVHT0Shv92KaSNoF7DFRvJ8RhUs7ODoBH
+
+## cn-Guizhou-2-A
+#Openstack:
+#  Host: 10.50.1.57
+#  AdminPassword: a0w1esQ2X65TkmVtokcye1xgqSIwrl27WRGrnroJ
+#  ProjectName: dx
+#  UserName: dx
+#  UserPassword: f452ad97-fd3f-4e10-9aef-89bc0f4e8e86
+#  ExternalNetwork: ce2398d8-72a5-46a0-8798-22748fbf0e3d
+#  ImageId: fd1f56ff-049e-4548-902c-c94e87f8f587
+#  FlavorId: a07b5980-b537-4ffe-8d1d-1f13c857d8b4
+#
+
+## UAT
+#Openstack:
+#  Host: 10.250.4.200
+#  AdminPassword: a0TRS53rRNN57WMCDi4yQZewiHFnib9XHoqRteAC
+#
+#Openstack:
+#  Host: 10.50.114.157
+#  AdminPassword: a0iIMFGMZK5VD7jwpVwsQhWkXAJuf9t4KCURhU3w
+#  ProjectName: sdn_test
+#  UserName: sdn_test
+#  UserPassword: sdn123456
+#  ExternalNetwork: 8925558f-1109-4ceb-a365-2cc799cf78a0
+#  ImageId: 6dbc243e-1255-411c-a922-c108c9793c5c
+#  FlavorId: 9282e12f-eaaa-4776-9da4-666de9b7476f
+
+
+## PROD
+#Openstack:
+#  Host: 10.244.16.250
+#  AdminPassword: a00cbg54I2rOv6W93eHEzDJ8y7rx1y6hkwnoATR7
+#  ProjectName: sdn_test
+#  UserName: sdn_test
+#  UserPassword: sdn123456
+#  ExternalNetwork: 8925558f-1109-4ceb-a365-2cc799cf78a0
+#  ImageId: 6dbc243e-1255-411c-a922-c108c9793c5c
+#  FlavorId: 9282e12f-eaaa-4776-9da4-666de9b7476f
+
+
+#Openstack:
+#  Host: 10.250.7.186
+#  AdminPassword: Wang.123
+#  ProjectName: sdn_test
+#  UserName: sdn_test
+#  UserPassword: sdn123456
+#  ExternalNetwork:
+#  ImageId: aa2efcd0-b25f-49a2-ab0b-ba10595797cd
+#  FlavorId: 2
+

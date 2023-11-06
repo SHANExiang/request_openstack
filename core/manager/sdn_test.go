@@ -117,7 +117,7 @@ func TestCreateRouter(t *testing.T) {
     })
 }
 
-// TestAddRemoveRouterInterface 6. test router interface
+// TestAddRemoveRouterInterface 6. test router interface and snat
 func TestAddRemoveRouterInterface(t *testing.T) {
     routerId := manager.CreateRouterHelper()
     manager.SetDefaultRouterGatewayHelper(routerId)
@@ -155,7 +155,7 @@ func TestAddRemoveRouterInterface(t *testing.T) {
     })
 }
 
-// TestCreateFip 7. test floating ip
+// TestCreateFip 7. test floating ip and fip qos limit
 func TestCreateFip(t *testing.T) {
     routerId := manager.CreateRouterHelper()
     manager.SetDefaultRouterGatewayHelper(routerId)
@@ -197,11 +197,31 @@ func TestCreateFip(t *testing.T) {
     })
 }
 
-// TestCreateInstance 8. test instance`
+// TestDNAT 8. test dnat
+func TestDNAT(t *testing.T) {
+    netId := manager.CreateNetworkHelper()
+    manager.CreateSubnetHelper(netId)
+    instance1 := manager.CreateInstanceHelper(netId)
+    instance2 := manager.CreateInstanceHelper(netId)
+    fipOpts := &entity.CreateFipOpts{
+        FloatingNetworkID: configs.CONF.ExternalNetwork,
+    }
+    fipId := manager.CreateFloatingIP(fipOpts)
+    pfId1 := manager.CreatePortForwardingHelper(fipId, instance1)
+    pfId2 := manager.CreatePortForwardingHelper(fipId, instance2)
+    pf1 := manager.GetPortForwarding(fipId, pfId1)
+    pf2 := manager.GetPortForwarding(fipId, pfId2)
+    if pf1.PortForwarding.Id == "" || pf2.PortForwarding.Id == ""{
+        t.Fatal("Create floating port forwarding failed")
+    }
+}
+
+// TestCreateInstance 9. test qos limit of two instances
 func TestCreateInstance(t *testing.T) {
     netId := manager.CreateNetworkHelper()
     manager.CreateSubnetHelper(netId)
     instanceId := manager.CreateInstanceHelper(netId)
+    instanceId2 := manager.CreateInstanceHelper(netId)
     instancePortId, _ := manager.GetInstancePort(instanceId)
     qosId := manager.CreateQosPolicyHelper()
     manager.UpdatePortWithQos(instancePortId, qosId)
@@ -211,12 +231,13 @@ func TestCreateInstance(t *testing.T) {
     }
     t.Cleanup(func() {
         manager.DeleteInstance(instanceId)
+        manager.DeleteInstance(instanceId2)
         manager.DeleteNetwork(netId)
         manager.DeleteQos(qosId)
     })
 }
 
-// TestCreateVpcConnection 9. test vpc connection
+// TestCreateVpcConnection 10. test vpc connection of one tenant
 func TestCreateVpcConnection(t *testing.T) {
     netId1 := manager.CreateNetworkHelper()
     subnetId1 := manager.CreateSubnetHelper(netId1)

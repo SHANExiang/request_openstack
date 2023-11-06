@@ -52,7 +52,8 @@ func NewAdminManager() *Manager {
 			internal.WithToken(token),
 			internal.WithProjectId(projectId),
 			internal.WithRequest(neutronUri, defaultClient),
-			internal.WithSnowFlake()),
+			internal.WithSnowFlake(),
+			internal.WithIsAdmin(true)),
 		Cinder: internal.NewCinder(
 			internal.WithAdminProjectId(adminProjectId),
 			internal.WithToken(token),
@@ -81,7 +82,8 @@ func NewManager() *Manager {
 			internal.WithToken(token),
 			internal.WithProjectId(projectId),
 			internal.WithRequest(neutronUri, defaultClient),
-			internal.WithSnowFlake()),
+			internal.WithSnowFlake(),
+			internal.WithIsAdmin(false)),
 		Cinder: internal.NewCinder(
 			internal.WithToken(token),
 			internal.WithProjectId(projectId),
@@ -123,6 +125,16 @@ func (m *Manager) CreateSubnetHelper(netId string) string {
 	return subnetId
 }
 
+func (m *Manager) CreatePortHelper(netId, subnetId string) string {
+	fixedIp1 := entity.FixedIP{SubnetId: subnetId}
+	fixedIp2 := entity.FixedIP{SubnetId: subnetId}
+    opts := &entity.CreatePortOpts{
+    	FixedIp: []entity.FixedIP{fixedIp1, fixedIp2},
+        NetworkId: netId,
+	}
+    return m.CreatePort(opts)
+}
+
 func (m *Manager) CreateRouterHelper() string {
 	routerOpts := &entity.CreateRouterOpts{
 		Name: DefaultName, Description: DefaultName,
@@ -158,6 +170,40 @@ func (m *Manager) CreateInstanceHelper(netId string) string {
 		FlavorRef:      configs.CONF.FlavorId,
 		ImageRef:       configs.CONF.ImageId,
 		Networks:       []entity.ServerNet{{UUID: netId}},
+		AdminPass:      "Wang.123",
+		SecurityGroups: []entity.ServerSg{{Name: DefaultName}},
+		Name:           DefaultName,
+		BlockDeviceMappingV2: []entity.BlockDeviceMapping{{
+			BootIndex: 0, Uuid: configs.CONF.ImageId, SourceType: "image",
+			DestinationType: "volume", VolumeSize: 30, DeleteOnTermination: true,
+		}},
+	}
+	instanceId := m.CreateInstance(&instanceOpts)
+	return instanceId
+}
+
+func (m *Manager) CreateInstanceByVolumeHelper(netId, volumeId string) string {
+	m.EnsureSgExist(DefaultName)
+	instanceOpts := entity.CreateInstanceOpts{
+		FlavorRef:      configs.CONF.FlavorId,
+		Networks:       []entity.ServerNet{{UUID: netId}},
+		AdminPass:      "Wang.123",
+		SecurityGroups: []entity.ServerSg{{Name: DefaultName}},
+		Name:           DefaultName,
+		BlockDeviceMappingV2: []entity.BlockDeviceMapping{{
+			BootIndex: 0, Uuid: volumeId, SourceType: "volume",
+			DestinationType: "volume", VolumeSize: 10, DeleteOnTermination: true,
+		}},
+	}
+	instanceId := m.CreateInstance(&instanceOpts)
+	return instanceId
+}
+
+func (m *Manager) CreateInstanceWithPortHelper(portId string) string {
+	m.EnsureSgExist(DefaultName)
+	instanceOpts := entity.CreateInstanceOpts{
+		FlavorRef:      configs.CONF.FlavorId,
+		Networks:       []entity.ServerNet{{Port: portId}},
 		AdminPass:      "Wang.123",
 		SecurityGroups: []entity.ServerSg{{Name: DefaultName}},
 		Name:           DefaultName,
@@ -218,14 +264,31 @@ func (m *Manager) CreateFloatingipWithPortHelper(portId string) string {
 	return m.CreateFloatingIP(opts)
 }
 
-func (m *Manager) CreateSnatHelper(routerId string) {
+func (m *Manager) CreateSnatHelper(routerId, subnetId, natIp string) {
+	subnet := m.GetSubnet(subnetId)
 	opts := &entity.Snat{SnatNetworkId: configs.CONF.ExternalNetwork,
-		OriginalCidrs: []string{"192.185.185.0/24"}, TenantId: "48ad435f0e8c44598d3236acdbb9ca47",
-		RouterId: routerId, SnatIpAddress: "10.50.123.100"}
+		OriginalCidrs: []string{subnet.Cidr}, TenantId: "48ad435f0e8c44598d3236acdbb9ca47",
+		RouterId: routerId, SnatIpAddress: natIp}
 	m.CreateSnat(opts)
 }
 
-func (m *Manager) CreatePortForwardingHelper(fipId string, instanceId string) {
+func (m *Manager) CreateDnatHelper(floatingipId, floatingipAddr, portId string) {
+	rand.Seed(123)
+	portIP := m.GetPortIP(portId)
+	opts := &entity.Dnat{
+		FloatingipId: floatingipId,
+		PortId: portId,
+		TenantId: "48ad435f0e8c44598d3236acdbb9ca47",
+		FixedIpAddress: portIP,
+		FloatingIpAddress: floatingipAddr,
+		Protocol: consts.ProtocolTCP,
+		FloatingIpPort: rand.Intn(65535),
+		FixedIpPort: 22,
+	}
+	m.CreateDnat(opts)
+}
+
+func (m *Manager) CreatePortForwardingHelper(fipId string, instanceId string) string {
 	internalPort, internalIpAddr := m.GetInstancePort(instanceId)
 	opts := entity.CreatePortForwardingOpts{
 		InternalPortID: internalPort,
@@ -234,7 +297,7 @@ func (m *Manager) CreatePortForwardingHelper(fipId string, instanceId string) {
 		ExternalPort: 10001,
 		Protocol: consts.ProtocolTCP,
 	}
-	m.CreatePortForwarding(fipId, &opts)
+	return m.CreatePortForwarding(fipId, &opts)
 }
 
 // CleanProjectAndUser delete project and user
@@ -323,12 +386,12 @@ func (m *Manager) CreateFirewallRuleDenySnat(sourceIpAddress, destIpAddress stri
 	return ruleId
 }
 
-func (m *Manager) CreateFirewallRuleAllowSnat(vpcCidr string) string {
+func (m *Manager) CreateFirewallRuleAllowSnat(snatIp string) string {
 	opts := &entity.CreateFirewallRuleOpts{
 		Name: DefaultName,
 		Action: consts.ActionAllow,
 		Protocol: consts.ProtocolAny,
-		SourceIPAddress: vpcCidr,
+		SourceIPAddress: snatIp,
 		IPVersion: 4,
 	}
 	ruleId := m.CreateFirewallRuleV1(opts)

@@ -22,7 +22,7 @@ func (m *Manager) CreateAndSetAggregate(flavorKey, flavorVal string) {
 }
 
 func (m *Manager) CreateInstanceForTest() {
-	name := "dx_test1"
+	name := "k8s"
 	netId, _, routerId := m.CreateVpc()
 	updateRouterOpts := &entity.UpdateRouterOpts{GatewayInfo: &entity.GatewayInfo{NetworkID: configs.CONF.ExternalNetwork}}
 	m.UpdateRouter(routerId, updateRouterOpts)
@@ -36,9 +36,11 @@ func (m *Manager) CreateInstanceForTest() {
 		Name:           name,
 		BlockDeviceMappingV2: []entity.BlockDeviceMapping{{
 			BootIndex: 0, Uuid: configs.CONF.ImageId, SourceType: "image",
-			DestinationType: "volume", VolumeSize: 10, DeleteOnTermination: true,
+			DestinationType: "volume", VolumeSize: 30, DeleteOnTermination: true,
 		}},
 	}
+	m.CreateInstance(&instanceOpts)
+	m.CreateInstance(&instanceOpts)
 	m.CreateInstance(&instanceOpts)
 }
 

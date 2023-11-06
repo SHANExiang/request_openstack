@@ -86,6 +86,21 @@ func (c *Cinder) createVolumeType(projectId string, reqBody string) map[string]i
 	return resp
 }
 
+func (c *Cinder) UpdateVolumeType(volumeTypeId, name, desc string) entity.VolumeType {
+	reqSuffix := fmt.Sprintf("%s/types/%s", c.adminProjectId, volumeTypeId)
+	formatter := `{
+                       "volume_type": {
+                            "name": "%+v",
+                            "description": "%+v"
+                       }
+                  }`
+	reqBody := fmt.Sprintf(formatter, name, desc)
+	resp := c.Put(c.headers, reqSuffix, reqBody)
+	var volumeType entity.VolumeType
+	_ = json.Unmarshal(resp, &volumeType)
+	return volumeType
+}
+
 func (c *Cinder) constructVolumeTypeSSD(size int) string {
 	name := fmt.Sprintf("SEBS-ssd-%d", size)
 	description := fmt.Sprintf("ssd硬盘-%dG", size)
@@ -110,6 +125,16 @@ func (c *Cinder) constructVolumeTypeCommon() string {
 func (c *Cinder) VolumeTypeAssociateQos(projectId, qosId, volTypeId string) map[string]interface{} {
 	URL := fmt.Sprintf("/%s/qos-specs/%s/associate?vol_type_id=%s", projectId, qosId, volTypeId)
 	return c.DecorateGetResp(c.Get)(c.headers, URL)
+}
+
+func (c *Cinder) GetVolumeType(volumeTypeId string) entity.VolumeType {
+	resp := c.Get(c.headers, fmt.Sprintf("%s/types/%s", c.adminProjectId, volumeTypeId))
+	var volumeType entity.VolumeType
+
+	log.Println(string(resp))
+	_ = json.Unmarshal(resp, &volumeType)
+
+	return volumeType
 }
 
 func (c *Cinder) ListVolumeTypes() entity.VolumeTypes {
@@ -361,6 +386,40 @@ func (c *Cinder) CreateVolumeBySnapshot(snapshotId string) string {
 	return volume.Id
 }
 
+func (c *Cinder) CreateVolumeByVolume(volumeId string) string {
+	urlSuffix := fmt.Sprintf("/%s/volumes", c.projectId)
+	name := fmt.Sprintf("volume-%s_to_volume", volumeId)
+	formatter := `{
+                     "volume": {
+                         "name": "%+v",
+                         "source_volid": "%+v"
+                     }
+                  }`
+	reqBody := fmt.Sprintf(formatter, name, volumeId)
+	resp := c.Post(c.headers, urlSuffix, reqBody)
+	var volume entity.VolumeMap
+	_ = json.Unmarshal(resp, &volume)
+
+	//cache.RedisClient.AddSliceAndJson(volumeId, c.tag + consts.VOLUMES, volume)
+	c.MakeSureVolumeAvailable(volume.Id)
+	log.Println("==============Create volume from volume success", volume.Id)
+	return volume.Id
+}
+
+
+func (c *Cinder) SetVolumeBootable(volumeId string) string {
+	urlSuffix := fmt.Sprintf("%s/volumes/%s/action", c.projectId, volumeId)
+	formatter := `{"os-set_bootable": {"bootable": true}}`
+	resp := c.Post(c.headers, urlSuffix, formatter)
+	var volume entity.VolumeMap
+	_ = json.Unmarshal(resp, &volume)
+
+	//cache.RedisClient.AddSliceAndJson(volumeId, c.tag + consts.VOLUMES, volume)
+	c.MakeSureVolumeAvailable(volumeId)
+	log.Println("==============Set volume bootable success", volume.Id)
+	return volume.Id
+}
+
 func (c *Cinder) MakeSureVolumeAvailable(volumeId string) {
 	volume := c.GetVolume(volumeId)
 	done := make(chan bool, 1)
@@ -423,7 +482,7 @@ func (c *Cinder) ListVolumes() entity.Volumes {
 }
 
 func (c *Cinder) GetVolume(volumeId string) entity.VolumeMap {
-	res := c.Get(c.headers, fmt.Sprintf("/%s/volumes/%s", c.projectId, volumeId))
+	res := c.Get(c.headers, fmt.Sprintf("%s/volumes/%s", c.projectId, volumeId))
 	var volume entity.VolumeMap
 	_ = json.Unmarshal(res, &volume)
 	log.Println("==============Get volume success", volumeId)

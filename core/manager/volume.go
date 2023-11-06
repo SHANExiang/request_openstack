@@ -19,6 +19,49 @@ func (m *Manager) SetVolumeTypeBackendProperty() {
 		}
 	}
 }
+
+// 云硬盘类型
+//名称：
+//SEBS-efficient   替换成	高效硬盘
+//SEBS-ssd	       替换成	SSD
+//SEBS-common-0	   替换成	普通硬盘
+//
+//
+//描述：
+//高效硬盘	替换成	SEBS-efficient
+//ssd硬盘	替换成	SEBS-ssd
+//普通硬盘	替换成	SEBS-common
+
+func (m *Manager) SetVolumeTypeNameDesc() {
+	volumeTypes := m.ListVolumeTypes()
+
+	for _, volumeType := range volumeTypes.VTs {
+		if strings.Contains(volumeType.Name, "SEBS-ssd") {
+			names := strings.Split(volumeType.Name, "SEBS-ssd")
+			if len(names) > 0 {
+				name := "SSD" + names[1]
+				desc := "SEBS-ssd" + names[1] + "G"
+				m.UpdateVolumeType(volumeType.Id, name, desc)
+			}
+		}
+
+		if strings.Contains(volumeType.Name, "SEBS-common-0") {
+			name := "普通硬盘"
+			desc := "SEBS-common"
+			m.UpdateVolumeType(volumeType.Id, name, desc)
+		}
+
+		if strings.Contains(volumeType.Name, "SEBS-efficient") {
+			names := strings.Split(volumeType.Name, "SEBS-efficient")
+			if len(names) > 0 {
+				name := "高效硬盘" + names[1]
+				desc := "SEBS-efficient" + names[1] + "G"
+				m.UpdateVolumeType(volumeType.Id, name, desc)
+			}
+		}
+	}
+}
+
 //
 //func (m *Manager) DetachAndDeleteVolume() {
 //	volumeIds := []string{"78ae5419-634c-4c43-8aa1-766d0650997d",

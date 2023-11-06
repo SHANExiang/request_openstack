@@ -38,6 +38,16 @@ func (k *Keystone) GetToken(projectName, userName, userPassword string) string {
 	return token
 }
 
+func (k *Keystone) GetFederationToken(projectName, userName, userPassword string) string {
+	urlSuffix := "/auth/tokens"
+	reqBody := k.constructAuthReqBody(projectName, userName, userPassword)
+	token := k.GetHeaderToken(k.Headers, urlSuffix, reqBody)
+	log.Println("==============Get token success")
+	return token
+}
+
+
+
 func (k *Keystone) setToken(projectName, userName, userPassword string) string {
 	log.Println("Etcd server no token, get from openstack then put to etcd server")
 	token := k.GetToken(projectName, userName, userPassword)
@@ -129,6 +139,23 @@ func (k *Keystone) createUser(projectId, userName, userPassword string) string {
 
 	//cache.RedisClient.SetMap(k.tag + consts.USERS, user.User.Id, user)
 	log.Println("==============Create user success", userName)
+	return user.User.Id
+}
+
+func (k *Keystone) SetUserPasswordNotExpire(userId string) string {
+	k.Headers["Content-Type"] = consts.ContentTypeJson
+	urlSuffix := fmt.Sprintf("/users/%s", userId)
+	reqBody := fmt.Sprintf("{\"user\": {\"options\": {\"ignore_password_expiry\": true}}}")
+	resp := k.Patch(k.Headers, urlSuffix, reqBody)
+
+	var user entity.UserMap
+	err := json.Unmarshal(resp, &user)
+	if err != nil {
+		log.Println("json unmarshal failed", err)
+		panic("")
+	}
+
+	log.Println("==============Update user success", userId)
 	return user.User.Id
 }
 

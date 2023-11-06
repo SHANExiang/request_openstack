@@ -101,7 +101,7 @@ func (s *SDN) GetMDCVpcConnects() {
 	log.Println(string(resp))
 }
 
-func (s *SDN) ListSnats() {
+func (s *SDN) ListSDNSnats() {
 	urlSuffix := "/controller/dc/v2/neutronapi/snat"
 	resp := s.List(s.headers, urlSuffix)
 	log.Println(string(resp))

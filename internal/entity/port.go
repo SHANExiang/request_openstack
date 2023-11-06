@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"fmt"
+	"request_openstack/consts"
+	"time"
+)
 
 type Port struct {
 	AllowedAddressPairs []interface{} `json:"allowed_address_pairs"`
@@ -43,4 +47,28 @@ type PortMap struct {
 type Ports struct {
 	Count    int    `json:"count"`
 	Ps       []Port `json:"ports"`
+}
+
+type FixedIP struct {
+	IpAddress             string    `json:"ip_address,omitempty"`
+	SubnetId              string    `json:"subnet_id"`
+}
+
+type CreatePortOpts struct {
+	AdminStateUp          *bool        `json:"admin_state_up,omitempty"`
+	Name                  string       `json:"name,omitempty"`
+	Description           string       `json:"description,omitempty"`
+	TenantID              string       `json:"tenant_id,omitempty"`
+	ProjectID             string       `json:"project_id,omitempty"`
+	FixedIp               []FixedIP    `json:"fixed_ips,omitempty"`
+	NetworkId             string       `json:"network_id,omitempty"`
+}
+
+
+func (opts *CreatePortOpts) ToRequestBody() string {
+	reqBody, err := BuildRequestBody(opts, consts.PORT)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to build request body %s", err))
+	}
+	return reqBody
 }

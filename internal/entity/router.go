@@ -16,14 +16,7 @@ type Router struct {
 	CreatedAt             time.Time     `json:"created_at"`
 	Description           string        `json:"description"`
 	Distributed           bool          `json:"distributed"`
-	ExternalGatewayInfo   struct {
-		EnableSnat       bool `json:"enable_snat"`
-		ExternalFixedIps []struct {
-			IpAddress string `json:"ip_address"`
-			SubnetId  string `json:"subnet_id"`
-		} `json:"external_fixed_ips"`
-		NetworkId string `json:"network_id"`
-	} `json:"external_gateway_info"`
+	GatewayInfo                         `json:"external_gateway_info"`
 	FlavorId         string        `json:"flavor_id"`
 	Ha               bool          `json:"ha"`
 	Id               string        `json:"id"`

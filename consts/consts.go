@@ -98,6 +98,8 @@ const (
     Images                     = "images"
     Snats                      = "snats"
     Snat                       = "snat"
+    Dnats                      = "dnats"
+    Dnat                       = "dnat"
 
     ACTIVE                     = "ACTIVE"
     Available                  = "available"

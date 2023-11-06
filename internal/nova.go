@@ -290,3 +290,32 @@ func (n *Nova) CreateFlavorExtraSpecs(flavorId string) {
 func (n *Nova) GetDBBDM(instanceId string) {
 
 }
+
+func (n *Nova) CreateInstanceSnapshot(instanceId string) string {
+	urlSuffix := fmt.Sprintf("servers/%s/action", instanceId)
+	forceDelete := `{
+    "createImage" : {
+        "name" : "foo-image",
+        "metadata": {
+            "min_disk": 0
+        }
+    }}`
+	var imageSnapshot entity.ImageSnapshot
+	res := n.Post(n.headers, urlSuffix, forceDelete)
+	_ = json.Unmarshal(res, &imageSnapshot)
+	return imageSnapshot.ImageId
+}
+
+
+func (n *Nova) RebuildInstanceByVolume(instanceId, volumeId string) string {
+	urlSuffix := fmt.Sprintf("servers/%s/action", instanceId)
+	formatter := `{
+    "rebuild" : {
+        "imageRef" : "%+v"
+    }}`
+	reqBody := fmt.Sprintf(formatter, volumeId)
+	var imageSnapshot entity.ImageSnapshot
+	res := n.Post(n.headers, urlSuffix, reqBody)
+	_ = json.Unmarshal(res, &imageSnapshot)
+	return imageSnapshot.ImageId
+}

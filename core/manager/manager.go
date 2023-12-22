@@ -17,7 +17,7 @@ var (
 	novaUri = fmt.Sprintf("%d/v2.1/", consts.NovaPort)
 	cinderUri = fmt.Sprintf("%d/v3/", consts.CinderPort)
 	defaultClient *fasthttp.Client
-	DefaultName = "sdn_test"
+	DefaultName = "default"
 )
 
 func init() {
@@ -40,6 +40,9 @@ func NewAdminManager() *Manager {
 	token := keystone.GetToken(consts.ADMIN, consts.ADMIN, configs.CONF.AdminPassword)
 	keystone.SetHeader(consts.AuthToken, token)
 	projectId := keystone.GetProjectId(configs.CONF.ProjectName)
+	if len(projectId) == 0 {
+		log.Fatalln("==============The user name not exist!!!\n")
+	}
 	adminProjectId := keystone.GetProjectId(consts.ADMIN)
 	return &Manager{
 		Keystone: keystone,
@@ -146,7 +149,20 @@ func (m *Manager) CreateRouterHelper() string {
 func (m *Manager) SetRouterGatewayHelper(routerId, externalNetId string)  {
 	updateRouterOpts := &entity.UpdateRouterOpts{
 		GatewayInfo: &entity.GatewayInfo{
-			NetworkID: externalNetId}}
+			NetworkID: externalNetId, QosPolicyId: "fe413250-e243-4694-b0b3-182731cd6f34"}}
+	m.UpdateRouter(routerId, updateRouterOpts)
+}
+
+func (m *Manager) SetRouterGatewaySpecifyIPHelper(routerId, externalNetId, subnetId, fixedIP string)  {
+	fixedIp := entity.ExternalFixedIP{
+		IPAddress: fixedIP,
+		SubnetID: subnetId,
+	}
+	updateRouterOpts := &entity.UpdateRouterOpts{
+		GatewayInfo: &entity.GatewayInfo{
+			NetworkID: externalNetId,
+			ExternalFixedIPs: []entity.ExternalFixedIP{fixedIp},
+		}}
 	m.UpdateRouter(routerId, updateRouterOpts)
 }
 
@@ -175,7 +191,7 @@ func (m *Manager) CreateInstanceHelper(netId string) string {
 		Name:           DefaultName,
 		BlockDeviceMappingV2: []entity.BlockDeviceMapping{{
 			BootIndex: 0, Uuid: configs.CONF.ImageId, SourceType: "image",
-			DestinationType: "volume", VolumeSize: 30, DeleteOnTermination: true,
+			DestinationType: "volume", VolumeSize: 20, DeleteOnTermination: true,
 		}},
 	}
 	instanceId := m.CreateInstance(&instanceOpts)

@@ -208,7 +208,7 @@ func (k *Keystone) getAdminRole() string {
 	return adminRole["id"].(string)
 }
 
-func (k *Keystone) assignRoleToUser(projectId, userId string) {
+func (k *Keystone) AssignRoleToUser(projectId, userId string) {
     adminRoleId := k.getAdminRole()
     urlSuffix := fmt.Sprintf("/projects/%s/users/%s/roles/%s", projectId, userId, adminRoleId)
     k.Put(k.Headers, urlSuffix, "")
@@ -226,7 +226,7 @@ func (k *Keystone) PrepareProjectUserToken(projectName, userName, userPassword s
 	userId := k.GetUserByName(userName)
 	if userId == "" {
 		userId = k.createUser(projectId, userName, userPassword)
-		k.assignRoleToUser(projectId, userId)
+		k.AssignRoleToUser(projectId, userId)
 	}
     token := k.AllocateToken(projectName, userName, userPassword)
     return projectId, token
@@ -255,7 +255,7 @@ func (k *Keystone) MakeSureProjectExist() string {
 	userId := k.GetUserByName(userName)
 	if userId == "" {
 		userId = k.createUser(projectId, userName, userPassword)
-		k.assignRoleToUser(projectId, userId)
+		k.AssignRoleToUser(projectId, userId)
 	}
 	return projectId
 }

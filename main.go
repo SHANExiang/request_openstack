@@ -1,79 +1,49 @@
 package main
 
 import (
-	"flag"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"request_openstack/configs"
-	"request_openstack/consts"
 	"request_openstack/core/manager"
-	"strings"
+	"runtime"
+	"time"
 )
 
-var defaultFilePath string
+//var defaultFilePath string
 
 func init() {
-	//configs.Viper()
+	configs.Viper()
 	//currentPath, _ := os.Getwd()
 	//defaultFilePath = currentPath + "\\configs\\templates\\"
-
-
-}
-
-func CLI() {
-	flag.Usage = func() {
-		usage := fmt.Sprintf("Usage: %s ", os.Args[0])
-		fmt.Fprintf(os.Stderr, "%s[-h]\n", usage)
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Repeat(" ", len(usage)) + "[--keystonerc </etc/kolla/admin-openrc.sh>]")
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Repeat(" ", len(usage)) + "[--delete]")
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Repeat(" ", len(usage)) + "[--recover]")
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Repeat(" ", len(usage)) + "[--username <username>]")
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Repeat(" ", len(usage)) + "[--userpassword <userpassword>]")
-		fmt.Fprintf(os.Stderr, "%s\n", strings.Repeat(" ", len(usage)) + "[--backupFile <backupFile>]")
-		fmt.Fprintf(os.Stderr, "optional arguments:\n  -h, --help            show this help message and exit\n")
-		flag.PrintDefaults()
-	}
-	keystonercFile := flag.String("keystonerc", "/etc/kolla/admin-openrc.sh", "Openstack keystone auth file")
-	toDelete := flag.Bool("delete", false, "Clear router gateway/disassociate fip/update fip no qos policy/delete fip port forwarding")
-	toRecover := flag.Bool("recover", false, "Set router gateway/associate fip/update fip with qos policy/add fip port forwarding")
-	username := flag.String("username", "admin", "User name")
-	userpassword := flag.String("userpassword", "", "User password")
-	backupFile := flag.String("backupFile", "", "Backup json file")
-	flag.Parse()
-    configs.ParseKeystonerc(*keystonercFile)
-	var m *manager.Manager
-	if *username == consts.ADMIN {
-		m = manager.NewAdminManager()
-	} else {
-		if len(*userpassword) == 0 {
-			log.Fatalln("==============The parameter userpassword is necessary while username is specified")
-		}
-		configs.CONF.UserName = *username
-		configs.CONF.UserPassword = *userpassword
-		configs.CONF.ProjectName = *username
-		m = manager.NewManager()
-	}
-	log.Printf("CONF=%+v", configs.CONF)
-	if *toDelete {
-		m.RunDeleteRes()
-	} else if *toRecover {
-		if len(*backupFile) == 0 {
-			log.Fatalln("==============The backupFile is necessary when to recover resources")
-		} else {
-			m.RunRecoverL3Res(*backupFile)
-		}
-	} else {
-		m.RunGenerateRecord()
-	}
 }
 
 func main() {
 	//cleaner := manager.NewCleaner([]string{"sdn_test"})
 	//cleaner.Run()
+    //L3RelatedCLI()
 
-	//m := manager.NewManager()
-	//m.RunGenerateRecord()
-	CLI()
+	m := manager.NewManager()
+	instance1 := m.CreateInstanceHelper("ed74d5fc-e644-4400-ac3f-3b946717c2f5")
+	port1, _ := m.GetInstancePort(instance1)
+	fipId := m.CreateFloatingipWithPortHelper(port1)
+    fip := m.GetFIP(fipId)
+
+	currentPath, _ := os.Getwd()
+	if runtime.GOOS == "windows" {
+		currentPath += "\\"
+	} else if runtime.GOOS == "linux" {
+		currentPath += "/"
+	}
+	fileName := currentPath + time.Now().Format("2006-01-02_15-04-05-1") + fmt.Sprintf("_record.json")
+	var file, err = os.Create(fileName)
+	defer file.Close()
+	if err != nil {
+		log.Fatalf("Failed to create file %s, %v", fileName, err)
+	}
+	data, _ := json.Marshal(fip)
+	file.Write(data)
+	log.Println("==============Export to json file success", fileName)
 }
 

@@ -26,7 +26,7 @@ var supportedNeutronResourceTypes = [...]string{
 type Neutron struct {
 	Request
 	projectId          string
-	headers            map[string]string
+	Headers            map[string]string
 	wg                 *sync.WaitGroup
 	DeleteChannels     map[string]chan Output
 	mu                 sync.Mutex
@@ -54,9 +54,9 @@ func NewNeutron(options ...Option) *Neutron {
 		Request: opts.Request,
 	}
 	neutron.projectId = opts.ProjectId
-	headers := make(map[string]string)
-	headers[consts.AuthToken] = opts.Token
-	neutron.headers = headers
+	Headers := make(map[string]string)
+	Headers[consts.AuthToken] = opts.Token
+	neutron.Headers = Headers
 	neutron.snowflake = opts.Snowflake
 	neutron.isAdmin = opts.IsAdmin
 	return neutron
@@ -88,7 +88,7 @@ func (n *Neutron) MakeDeleteChannel(resourceType string, length int) chan Output
 func (n *Neutron) CreateNetwork(opts *entity.CreateNetworkOpts) string {
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name + strconv.FormatUint(n.snowflake.NextVal(), 10), consts.NETWORK)
 	reqBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, consts.NETWORKS, reqBody)
+	resp := n.Post(n.Headers, consts.NETWORKS, reqBody)
 
 	var network entity.NetworkMap
 	_ = json.Unmarshal(resp, &network)
@@ -100,7 +100,7 @@ func (n *Neutron) CreateNetwork(opts *entity.CreateNetworkOpts) string {
 
 func (n *Neutron) GetNetwork(networkId string) entity.NetworkMap {
 	urlSuffix := fmt.Sprintf("networks/%s", networkId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var obj entity.NetworkMap
 	_ = json.Unmarshal(resp, &obj)
 	return obj
@@ -108,7 +108,7 @@ func (n *Neutron) GetNetwork(networkId string) entity.NetworkMap {
 
 func (n *Neutron) UpdateNetwork(netId string, updateBody string) {
 	urlSuffix := fmt.Sprintf("networks/%s", netId)
-	resp := n.Put(n.headers, urlSuffix, updateBody)
+	resp := n.Put(n.Headers, urlSuffix, updateBody)
 
 	var net entity.NetworkMap
     _ = json.Unmarshal(resp, &net)
@@ -130,7 +130,7 @@ func (n *Neutron) ListNetworks() entity.Networks {
 		urlSuffix = fmt.Sprintf("networks?project_id=%s", n.projectId)
 	}
 	//urlSuffix := "networks"
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var networks entity.Networks
 	_ = json.Unmarshal(resp, &networks)
 	log.Println("==============List network success, there had", networks.Count)
@@ -139,7 +139,7 @@ func (n *Neutron) ListNetworks() entity.Networks {
 
 func (n *Neutron) getNetworkPorts(networkId string) []entity.Port {
 	urlSuffix := fmt.Sprintf("ports?network_id=%s", networkId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ports entity.Ports
 	_ = json.Unmarshal(resp, &ports)
 
@@ -158,7 +158,7 @@ func (n *Neutron) DeleteNetwork(ipId string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("networks/%s", ipId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -180,7 +180,7 @@ func (n *Neutron) DeleteNetworks() {
 
 // GetExtNet get the first ext net
 func (n *Neutron) GetExtNet() string {
-	resp := n.DecorateGetResp(n.Get)(n.headers, "networks?router%3Aexternal=True")
+	resp := n.DecorateGetResp(n.Get)(n.Headers, "networks?router%3Aexternal=True")
 	v, _ := resp["networks"]
 	networks := v.([]interface{})
 	if len(networks) == 0 {
@@ -200,7 +200,7 @@ func (n *Neutron) CreateSubnet(opts *entity.CreateSubnetOpts) string {
 	//opts.CIDR = fmt.Sprintf("192.%d.%d.0/24", randomNum, randomNum)
 	//opts.IPVersion = 4
 	reqBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, consts.SUBNETS, reqBody)
+	resp := n.Post(n.Headers, consts.SUBNETS, reqBody)
 	var subnet entity.SubnetMap
 	_ = json.Unmarshal(resp, &subnet)
 	log.Println("==============Create subnet success", subnet.Subnet.Id)
@@ -209,7 +209,7 @@ func (n *Neutron) CreateSubnet(opts *entity.CreateSubnetOpts) string {
 
 func (n *Neutron) UpdateSubnet(subnetId, updateBody string) {
 	urlSuffix := fmt.Sprintf("subnets/%s", subnetId)
-	_ = n.Put(n.headers, urlSuffix, updateBody)
+	_ = n.Put(n.Headers, urlSuffix, updateBody)
 
 	log.Printf("==============update subnet %s success\n", subnetId)
 }
@@ -226,7 +226,7 @@ func (n *Neutron) UpdateSubnetDnsNameservers (subnetId string) {
 
 func (n *Neutron) GetSubnet(subnetId string) entity.SubnetMap {
 	urlSuffix := fmt.Sprintf("subnets/%s", subnetId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var subnet entity.SubnetMap
 	_ = json.Unmarshal(resp, &subnet)
 	log.Printf("==============Get subnet success %+v", subnet)
@@ -240,7 +240,7 @@ func (n *Neutron) ListSubnet() entity.Subnets {
 	} else {
 		urlSuffix = fmt.Sprintf("subnets?project_id=%s", n.projectId)
 	}
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var subnets entity.Subnets
 	_ = json.Unmarshal(resp, &subnets)
 	log.Println("==============List subnet success")
@@ -264,7 +264,7 @@ func (n *Neutron) DeleteSubnet(ipId string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("%s/%s", consts.SUBNETS, ipId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -289,7 +289,7 @@ func (n *Neutron) DeleteSubnets() {
 func (n *Neutron) CreatePort(opts *entity.CreatePortOpts) string {
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name + strconv.FormatUint(n.snowflake.NextVal(), 10), consts.PORT)
 	reqBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, consts.PORTS, reqBody)
+	resp := n.Post(n.Headers, consts.PORTS, reqBody)
 	var port entity.PortMap
 	_ = json.Unmarshal(resp, &port)
 	log.Println("==============Create port success", port.Port.Id)
@@ -298,7 +298,7 @@ func (n *Neutron) CreatePort(opts *entity.CreatePortOpts) string {
 
 func (n *Neutron) updatePort(portId string, reqBody string) {
 	urlSuffix := fmt.Sprintf("ports/%s", portId)
-	n.Put(n.headers, urlSuffix, reqBody)
+	n.Put(n.Headers, urlSuffix, reqBody)
 	log.Println("==============Update port success", portId)
 }
 
@@ -334,7 +334,7 @@ func (n *Neutron) UpdatePortWithNoQos(portId string) {
 
 func (n *Neutron) GetPort(portId string) entity.PortMap {
 	urlSuffix := fmt.Sprintf("ports/%s", portId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var port entity.PortMap
 	_ = json.Unmarshal(resp, &port)
 	log.Println("==============Get port success", portId)
@@ -343,7 +343,7 @@ func (n *Neutron) GetPort(portId string) entity.PortMap {
 
 func (n *Neutron) GetPortIP(portId string) string {
 	urlSuffix := fmt.Sprintf("ports/%s", portId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var port entity.PortMap
 	_ = json.Unmarshal(resp, &port)
 	log.Println("==============Get port success", portId)
@@ -358,7 +358,7 @@ func (n *Neutron) ListPort() entity.Ports {
 		urlSuffix = fmt.Sprintf("ports?project_id=%s", n.projectId)
 	}
 
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var ports entity.Ports
 	_ = json.Unmarshal(resp, &ports)
 	log.Println("==============List port success")
@@ -367,7 +367,7 @@ func (n *Neutron) ListPort() entity.Ports {
 
 func (n *Neutron) GetPortByDevice(deviceId, deviceOwner string) *entity.Port {
 	urlSuffix := fmt.Sprintf("ports?device_id=%s&device_owner=%s", deviceId, deviceOwner)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ports entity.Ports
 	_ = json.Unmarshal(resp, &ports)
 	if len(ports.Ps) == 0 {
@@ -388,7 +388,7 @@ func (n *Neutron) DeletePort(ipId string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("%s/%s", consts.PORTS, ipId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -413,7 +413,7 @@ func (n *Neutron) DeletePorts() {
 func (n *Neutron) CreateRouter(opts *entity.CreateRouterOpts) string {
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name + strconv.FormatUint(n.snowflake.NextVal(), 10), consts.ROUTER)
 	PostBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, consts.ROUTERS, PostBody)
+	resp := n.Post(n.Headers, consts.ROUTERS, PostBody)
 	var router entity.RouterMap
 	_ = json.Unmarshal(resp, &router)
 
@@ -425,7 +425,7 @@ func (n *Neutron) CreateRouter(opts *entity.CreateRouterOpts) string {
 func (n *Neutron) UpdateRouter(routerId string, opts *entity.UpdateRouterOpts) string {
 	PostBody := opts.ToRequestBody()
 	urlSuffix := fmt.Sprintf("routers/%s", routerId)
-	resp := n.Put(n.headers, urlSuffix, PostBody)
+	resp := n.Put(n.Headers, urlSuffix, PostBody)
 	var router entity.RouterMap
 	_ = json.Unmarshal(resp, &router)
 
@@ -437,7 +437,7 @@ func (n *Neutron) UpdateRouter(routerId string, opts *entity.UpdateRouterOpts) s
 func (n *Neutron) AddRouterInterface(opts *entity.AddRouterInterfaceOpts) string {
 	routerId, body := opts.ToRequestBody()
 	urlSuffix := fmt.Sprintf("routers/%s/add_router_interface", routerId)
-	n.Put(n.headers, urlSuffix, body)
+	n.Put(n.Headers, urlSuffix, body)
 
 	log.Println("==============Add router interface success")
 	return routerId
@@ -457,7 +457,7 @@ func (n *Neutron) RemoveRouterInterface(routerId, subnetId string) Output {
 	}()
 	body := fmt.Sprintf("{\"subnet_id\": \"%+v\"}", subnetId)
 	urlSuffix := fmt.Sprintf("routers/%s/remove_router_interface", routerId)
-	outputObj.Response = string(n.Put(n.headers, urlSuffix, body))
+	outputObj.Response = string(n.Put(n.Headers, urlSuffix, body))
 	outputObj.Success = true
 	return outputObj
 }
@@ -489,7 +489,7 @@ func (n *Neutron) ListRouters() entity.Routers {
 	} else {
 		urlSuffix = fmt.Sprintf("routers?project_id=%s", n.projectId)
 	}
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var routers entity.Routers
 	_ = json.Unmarshal(resp, &routers)
 	log.Println("==============List routers success, there had", routers.Count)
@@ -498,7 +498,7 @@ func (n *Neutron) ListRouters() entity.Routers {
 
 func (n *Neutron) listRouterInterfacePorts() entity.Ports {
 	urlSuffix := fmt.Sprintf("ports?device_owner=network:router_interface&project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ports entity.Ports
 	_ = json.Unmarshal(resp, &ports)
 	log.Println("==============List router interface port success, there had", ports.Count)
@@ -560,7 +560,7 @@ func (n *Neutron) DeleteRouter(routerId string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("%s/%s", consts.ROUTERS, routerId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -590,7 +590,7 @@ func (n *Neutron) ClearRouterGateway(routerId, extNetId string) Output {
 	}()
 	urlSuffix := fmt.Sprintf("routers/%s", routerId)
 	reqBody := `{"router": {"external_gateway_info" : {}}}`
-    n.Put(n.headers, urlSuffix, reqBody)
+    n.Put(n.Headers, urlSuffix, reqBody)
     outputObj.Success = true
     outputObj.Response = ""
 	log.Println("==============Clear router gateway success, router", routerId)
@@ -622,7 +622,7 @@ func (n *Neutron) DeleteRouterGateways() {
 func (n *Neutron) RemoveRouterInterfaceByPort(routerId, portId string) string {
 	body := fmt.Sprintf("{\"port_id\": \"%+v\"}", portId)
 	urlSuffix := fmt.Sprintf("routers/%s/remove_router_interface", routerId)
-	n.Put(n.headers, urlSuffix, body)
+	n.Put(n.Headers, urlSuffix, body)
 	log.Println("==============Remove router interface success")
 	return routerId
 }
@@ -630,7 +630,7 @@ func (n *Neutron) RemoveRouterInterfaceByPort(routerId, portId string) string {
 func (n *Neutron) addExternalGateway(routerId, extNetId string) map[string]interface{} {
 	urlSuffix := fmt.Sprintf("routers/%s", routerId)
 	reqBody := fmt.Sprintf("{\"router\" : {\"external_gateway_info\": {\"network_id\" : \"%+v\"}}}", extNetId)
-	resp := n.DecorateResp(n.Put)(n.headers, urlSuffix, reqBody)
+	resp := n.DecorateResp(n.Put)(n.Headers, urlSuffix, reqBody)
 	router := resp["router"].(map[string]interface{})
 	log.Println("==============Set router gateway success")
     return router
@@ -638,7 +638,7 @@ func (n *Neutron) addExternalGateway(routerId, extNetId string) map[string]inter
 
 func (n *Neutron) getRouterPorts(routerId string) []interface{} {
 	urlSuffix := fmt.Sprintf("ports?device_id=%s", routerId)
-	resp := n.DecorateGetResp(n.List)(n.headers, urlSuffix)
+	resp := n.DecorateGetResp(n.List)(n.Headers, urlSuffix)
 	routerPorts := resp["ports"].([]interface{})
 	return routerPorts
 }
@@ -652,7 +652,7 @@ func (n *Neutron) disassociateAnyPort(routerId string) {
 
 func (n *Neutron) GetRouter(routerId string) entity.RouterMap {
 	urlSuffix := fmt.Sprintf("routers/%s", routerId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var router entity.RouterMap
 	_ = json.Unmarshal(resp, &router)
 	log.Println("==============Get router success", routerId)
@@ -681,7 +681,7 @@ func (n *Neutron) getRouterExternalIps(routerId string) []string {
 func (n *Neutron) CreateFloatingIP(opts *entity.CreateFipOpts) string {
     urlSuffix := consts.FLOATINGIPS
     createBody := opts.ToRequestBody()
-    resp := n.Post(n.headers, urlSuffix, createBody)
+    resp := n.Post(n.Headers, urlSuffix, createBody)
     var fip entity.FipMap
     _ = json.Unmarshal(resp, &fip)
 	floatingIpId := fip.Floatingip.Id
@@ -703,7 +703,7 @@ func (n *Neutron) CreateFloatingIP(opts *entity.CreateFipOpts) string {
 
 func (n *Neutron) UpdateFloatingIp(fipId, updateBody string) string {
 	urlSuffix := fmt.Sprintf("floatingips/%s", fipId)
-	resp := n.Put(n.headers, urlSuffix, updateBody)
+	resp := n.Put(n.Headers, urlSuffix, updateBody)
 	var fip entity.FipMap
 	_ = json.Unmarshal(resp, &fip)
 
@@ -733,7 +733,7 @@ func (n *Neutron) FloatingIpDisassociatePort(fipId string) string {
 
 func (n *Neutron) GetFIP(fipId string) entity.FipMap {
 	urlSuffix := fmt.Sprintf("floatingips/%s", fipId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var fip entity.FipMap
 	_ = json.Unmarshal(resp, &fip)
 	log.Println("==============Get fip success", fipId)
@@ -748,7 +748,7 @@ func (n *Neutron) ListFIPs() entity.Fips {
 		urlSuffix = fmt.Sprintf("floatingips?project_id=%s", n.projectId)
 	}
 
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var fs entity.Fips
 	_ = json.Unmarshal(resp, &fs)
 	log.Println("==============List fip success, there had", fs.Count)
@@ -765,7 +765,7 @@ func (n *Neutron) DeleteFIP(fipId string) Output {
 		}
 	}()
 	urlSuffix := fmt.Sprintf("%s/%s", consts.FLOATINGIPS, fipId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -790,7 +790,7 @@ func (n *Neutron) DeleteFloatingips() {
 func (n *Neutron) CreatePortForwarding(fipId string, opts *entity.CreatePortForwardingOpts) string {
 	urlSuffix := fmt.Sprintf("%s/%s/%s", consts.FLOATINGIPS, fipId, consts.PORTFORWARDINGS)
 	createBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, urlSuffix, createBody)
+	resp := n.Post(n.Headers, urlSuffix, createBody)
 	var pf entity.PortForwardingMap
 	_ = json.Unmarshal(resp, &pf)
 
@@ -800,7 +800,7 @@ func (n *Neutron) CreatePortForwarding(fipId string, opts *entity.CreatePortForw
 
 func (n *Neutron) GetPortForwarding(fipId string, pfId string) entity.PortForwardingMap {
 	urlSuffix := fmt.Sprintf("%s/%s/%s/%s", consts.FLOATINGIPS, fipId, consts.PORTFORWARDINGS, pfId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var pf entity.PortForwardingMap
 	_ = json.Unmarshal(resp, &pf)
 
@@ -810,7 +810,7 @@ func (n *Neutron) GetPortForwarding(fipId string, pfId string) entity.PortForwar
 
 func (n *Neutron) ListPortForwarding(fipId string) entity.PortForwardings {
 	urlSuffix := fmt.Sprintf("%s/%s/%s", consts.FLOATINGIPS, fipId, consts.PORTFORWARDINGS)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var pfs entity.PortForwardings
 	_ = json.Unmarshal(resp, &pfs)
 
@@ -828,7 +828,7 @@ func (n *Neutron) DeletePortForwarding(fipId string, pfId string) Output {
 		}
 	}()
 	urlSuffix := fmt.Sprintf("%s/%s/%s/%s", consts.FLOATINGIPS, fipId, consts.PORTFORWARDINGS, pfId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -871,7 +871,7 @@ func (n *Neutron) CreateQos() string {
                       }
                    }`
 	reqBody := fmt.Sprintf(formatter, name)
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var qos entity.QosPolicyMap
 	_ = json.Unmarshal(resp, &qos)
 	qosId := qos.Policy.Id
@@ -883,7 +883,7 @@ func (n *Neutron) CreateQos() string {
 
 func (n *Neutron) GetQos(qosId string) entity.QosPolicyMap {
 	urlSuffix := fmt.Sprintf("qos/policies/%s", qosId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var qos entity.QosPolicyMap
 	_ = json.Unmarshal(resp, &qos)
 	log.Println("==============Get qos policy resp", string(resp))
@@ -899,7 +899,7 @@ func (n *Neutron) CreateBandwidthLimitRuleIngress(qosId string) {
                       }
                    }`
 	reqBody := formatter
-	n.Post(n.headers, urlSuffix, reqBody)
+	n.Post(n.Headers, urlSuffix, reqBody)
 	log.Println("==============Create bandwidth_limit_rule success")
 }
 
@@ -913,14 +913,14 @@ func (n *Neutron) CreateBandwidthLimitRuleEgress(qosId string) {
                       }
                    }`
 	reqBody := formatter
-	n.Post(n.headers, urlSuffix, reqBody)
+	n.Post(n.Headers, urlSuffix, reqBody)
 	log.Println("==============Create bandwidth_limit_rule success")
 }
 
 func (n *Neutron) updateBandwidthLimitRule(qosId string, ruleId string) {
 	urlSuffix := fmt.Sprintf("qos/policies/%s/bandwidth_limit_rules/%s", qosId, ruleId)
 	reqBody := fmt.Sprintf("{\"bandwidth_limit_rule\": {\"max_kbps\": \"10304\"}}")
-	resp := n.Put(n.headers, urlSuffix, reqBody)
+	resp := n.Put(n.Headers, urlSuffix, reqBody)
 	log.Println("==============Update bandwidth_limit_rule success", resp)
 }
 
@@ -956,14 +956,14 @@ func (n *Neutron) DeleteBandwidthLimitRules() {
 func (n *Neutron) CreateDscpMarkingRule(qosId string) {
 	urlSuffix := fmt.Sprintf("qos/policies/%s/dscp_marking_rules", qosId)
 	reqBody := fmt.Sprintf("{\"dscp_marking_rule\": {\"dscp_mark\": \"32\"}}")
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	log.Println("==============Create dscp_marking_rule success", string(resp))
 }
 
 func (n *Neutron) updateDscpMarkingRule(qosId string, ruleId string) {
 	urlSuffix := fmt.Sprintf("qos/policies/%s/dscp_marking_rules/%s", qosId, ruleId)
 	reqBody := fmt.Sprintf("{\"dscp_marking_rule\": {\"dscp_mark\": \"32\"}}")
-	resp := n.Put(n.headers, urlSuffix, reqBody)
+	resp := n.Put(n.Headers, urlSuffix, reqBody)
 	log.Println("==============Update dscp_marking_rule success", resp)
 
 	//n.SyncMap(n.tag + consts.QOS_POLICIES, qosId, func(s string) interface{} {
@@ -1002,7 +1002,7 @@ func (n *Neutron) DeleteDscpMarkingRules() {
 func (n *Neutron) CreateMinimumBandwidthRule(qosId string) {
 	urlSuffix := fmt.Sprintf("qos/policies/%s/minimum_bandwidth_rules", qosId)
 	reqBody := fmt.Sprintf("{\"minimum_bandwidth_rule\": {\"min_kbps\": \"500\", \"direction\": \"egress\"}}")
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	log.Println("==============Create minimum_bandwidth_rule success", string(resp))
 
 	//n.SyncMap(n.tag + consts.QOS_POLICIES, qosId, func(s string) interface{} {
@@ -1013,7 +1013,7 @@ func (n *Neutron) CreateMinimumBandwidthRule(qosId string) {
 func (n *Neutron) updateMinimumBandwidthRule(qosId string, ruleId string) {
 	urlSuffix := fmt.Sprintf("qos/policies/%s/minimum_bandwidth_rules/%s", qosId, ruleId)
 	reqBody := fmt.Sprintf("{\"minimum_bandwidth_rule\": {\"min_kbps\": \"12003\"}}")
-	resp := n.Put(n.headers, urlSuffix, reqBody)
+	resp := n.Put(n.Headers, urlSuffix, reqBody)
 	log.Println("==============Update minimum_bandwidth_rule success", resp)
 
 	//n.SyncMap(n.tag + consts.QOS_POLICIES, qosId, func(s string) interface{} {
@@ -1065,7 +1065,7 @@ func (n *Neutron) listQoss() entity.QosPolicies {
 	} else {
 		urlSuffix = fmt.Sprintf("ports?project_id=%s", n.projectId)
 	}
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var qos entity.QosPolicies
 	_ = json.Unmarshal(resp, &qos)
 	log.Println("==============List qos policy success, there had", qos.Count)
@@ -1083,7 +1083,7 @@ func (n *Neutron) DeleteQos(qosId string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("qos/policies/%s", qosId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -1122,13 +1122,13 @@ func (n *Neutron) DeleteQosRule(ruleType, qosId, ruleId string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("qos/policies/%s/%s/%s", qosId, identity, ruleId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
 func (n *Neutron) GetInstancePort(instanceId string) (string, string) {
 	urlSuffix := fmt.Sprintf("ports?device_id=%s", instanceId)
-	resp := n.DecorateGetResp(n.List)(n.headers, urlSuffix)
+	resp := n.DecorateGetResp(n.List)(n.Headers, urlSuffix)
 	instancePorts := resp["ports"].([]interface{})
 	port := instancePorts[0].(map[string]interface{})
 	portId := port["id"].(string)
@@ -1140,7 +1140,7 @@ func (n *Neutron) GetInstancePort(instanceId string) (string, string) {
 
 func (n *Neutron) GetFloatingipPort(fipId string) *entity.Port {
 	urlSuffix := fmt.Sprintf("ports?device_id=%s", fipId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ports entity.Ports
 	_ = json.Unmarshal(resp, &ports)
 	log.Println("==============Get floatingip port success for fip=", fipId, string(resp))
@@ -1156,7 +1156,7 @@ func (n *Neutron) createFirewallGroup(ingressPolicy, egressPolicy string) map[st
 	urlSuffix := "fwaas/firewall_groups"
 	name := "dx_fw_" + strconv.FormatUint(n.snowflake.NextVal(), 10)
 	reqBody := fmt.Sprintf("{\"firewall_group\": {\"name\": \"%+v\", \"ingress_firewall_policy_id\": \"%+v\", \"egress_firewall_policy_id\": \"%+v\"}}", name, ingressPolicy, egressPolicy)
-	resp := n.DecorateResp(n.Post)(n.headers, urlSuffix, reqBody)
+	resp := n.DecorateResp(n.Post)(n.Headers, urlSuffix, reqBody)
 	firewallGroup := resp["firewall_group"].(map[string]interface{})
 	firewallGroupId := firewallGroup["id"].(string)
 
@@ -1167,7 +1167,7 @@ func (n *Neutron) createFirewallGroup(ingressPolicy, egressPolicy string) map[st
 
 func (n *Neutron) updateFirewallGroup(firewallGroupId, updateBody string) map[string]interface{} {
 	urlSuffix := fmt.Sprintf("fwaas/firewall_groups/%s", firewallGroupId)
-	resp := n.DecorateResp(n.Put)(n.headers, urlSuffix, updateBody)
+	resp := n.DecorateResp(n.Put)(n.Headers, urlSuffix, updateBody)
 	firewallGroup := resp["firewall_group"].(map[string]interface{})
 
 	n.SyncResource(firewallGroupId, nil, firewallGroup)
@@ -1178,7 +1178,7 @@ func (n *Neutron) updateFirewallGroup(firewallGroupId, updateBody string) map[st
 func (n *Neutron) updateFirewallGroupNoPortsNoPolicies(firewallGroupId string) map[string]interface{} {
 	urlSuffix := fmt.Sprintf("fwaas/firewall_groups/%s", firewallGroupId)
 	updateBody := `{"firewall_group": {"ports": [], "ingress_firewall_policy_id": null, "egress_firewall_policy_id": null}}`
-	resp := n.DecorateResp(n.Put)(n.headers, urlSuffix, updateBody)
+	resp := n.DecorateResp(n.Put)(n.Headers, urlSuffix, updateBody)
 	firewallGroup := resp["firewall_group"].(map[string]interface{})
 
 	n.SyncResource(firewallGroupId, nil, firewallGroup)
@@ -1200,7 +1200,7 @@ func (n *Neutron) constructUpdateWithPolicy(ingressPolicy, egressPolicy string) 
 
 func (n *Neutron) deleteFirewallGroup(firewallGroupId string) {
 	urlSuffix := fmt.Sprintf("fwaas/firewall_groups/%s", firewallGroupId)
-	ok, _ := n.Delete(n.headers, urlSuffix)
+	ok, _ := n.Delete(n.Headers, urlSuffix)
 	if ok {
 		//cache.RedisClient.DeleteKV(firewallGroupId)
 		//cache.RedisClient.RemoveFromSlice(n.tag+consts.FIREWALLGROUPS, firewallGroupId)
@@ -1254,7 +1254,7 @@ func (n *Neutron) createFirewallPolicy(firewallRules []string) map[string]interf
     fp := map[string]entity.FirewallPolicy{"firewall_policy": en}
 	reqBody, _ := json.Marshal(fp)
 
-	resp := n.DecorateResp(n.Post)(n.headers, urlSuffix, string(reqBody))
+	resp := n.DecorateResp(n.Post)(n.Headers, urlSuffix, string(reqBody))
 	firewallPolicy := resp["firewall_policy"].(map[string]interface{})
 	firewallPolicyId := firewallPolicy["id"].(string)
 
@@ -1266,7 +1266,7 @@ func (n *Neutron) createFirewallPolicy(firewallRules []string) map[string]interf
 func (n *Neutron) updateFirewallPolicyNoRules(firewallPolicyId string) map[string]interface{} {
 	urlSuffix := fmt.Sprintf("fwaas/firewall_policies/%s", firewallPolicyId)
 	reqBody := `{"firewall_policy": {"firewall_rules": []}}`
-	resp := n.DecorateResp(n.Put)(n.headers, urlSuffix, reqBody)
+	resp := n.DecorateResp(n.Put)(n.Headers, urlSuffix, reqBody)
 	firewallPolicy := resp["firewall_policy"].(map[string]interface{})
 
 	n.SyncResource(firewallPolicyId, nil, firewallPolicy)
@@ -1277,7 +1277,7 @@ func (n *Neutron) updateFirewallPolicyNoRules(firewallPolicyId string) map[strin
 func (n *Neutron) deleteFirewallPolicy(firewallPolicyId string) {
 	n.updateFirewallPolicyNoRules(firewallPolicyId)
 	urlSuffix := fmt.Sprintf("fwaas/firewall_policies/%s", firewallPolicyId)
-	if ok, _ := n.Delete(n.headers, urlSuffix); ok {
+	if ok, _ := n.Delete(n.Headers, urlSuffix); ok {
 		cache.RedisClient.DeleteKV(firewallPolicyId)
 		//cache.RedisClient.RemoveFromSlice(n.tag + consts.FIREWALLPOLICIES, firewallPolicyId)
 		log.Println("==============Delete firewall policy success", firewallPolicyId)
@@ -1301,7 +1301,7 @@ func (n *Neutron) createFirewallRule() map[string]interface{} {
 	destinationPort := "80"
 	protocol := "tcp"
 	reqBody := fmt.Sprintf("{\"firewall_rule\": {\"name\": \"%+v\", \"action\": \"%+v\", \"destination_port\": \"%+v\", \"protocol\": \"%+v\"}}", name, action, destinationPort, protocol)
-	resp := n.DecorateResp(n.Post)(n.headers, urlSuffix, reqBody)
+	resp := n.DecorateResp(n.Post)(n.Headers, urlSuffix, reqBody)
 	firewallRule := resp["firewall_rule"].(map[string]interface{})
 	firewallRuleId := firewallRule["id"].(string)
 
@@ -1313,7 +1313,7 @@ func (n *Neutron) createFirewallRule() map[string]interface{} {
 func (n *Neutron) insertRule(firewallPolicyId, firewallRuleId string) {
 	urlSuffix := fmt.Sprintf("fwaas/firewall_policies/%s/insert_rule", firewallPolicyId)
     reqBody := fmt.Sprintf("{\"firewall_rule_id\": \"%+v\", \"insert_after\": \"\", \"insert_before\": \"\"}", firewallRuleId)
-    firewallPolicy := n.DecorateResp(n.Put)(n.headers, urlSuffix, reqBody)
+    firewallPolicy := n.DecorateResp(n.Put)(n.Headers, urlSuffix, reqBody)
 
     n.SyncResource(firewallPolicyId, nil, firewallPolicy)
 	log.Println("==============insert firewall rule success", firewallRuleId)
@@ -1322,7 +1322,7 @@ func (n *Neutron) insertRule(firewallPolicyId, firewallRuleId string) {
 func (n *Neutron) removeRule(firewallPolicyId, firewallRuleId string) {
 	urlSuffix := fmt.Sprintf("fwaas/firewall_policies/%s/remove_rule", firewallPolicyId)
 	reqBody := fmt.Sprintf("{\"firewall_rule_id\": \"%+v\"}", firewallRuleId)
-	firewallPolicy := n.DecorateResp(n.Put)(n.headers, urlSuffix, reqBody)
+	firewallPolicy := n.DecorateResp(n.Put)(n.Headers, urlSuffix, reqBody)
 
 	n.SyncResource(firewallPolicyId, nil, firewallPolicy)
 	log.Println("==============remove firewall rule success", firewallRuleId)
@@ -1330,7 +1330,7 @@ func (n *Neutron) removeRule(firewallPolicyId, firewallRuleId string) {
 
 func (n *Neutron) deleteFirewallRule(firewallRuleId string) {
 	urlSuffix := fmt.Sprintf("fwaas/firewall_rules/%s", firewallRuleId)
-	if ok, _ := n.Delete(n.headers, urlSuffix); ok {
+	if ok, _ := n.Delete(n.Headers, urlSuffix); ok {
 		cache.RedisClient.DeleteKV(firewallRuleId)
 		//cache.RedisClient.RemoveFromSlice(n.tag + consts.FIREWALLRULES, firewallRuleId)
 		log.Println("==============Delete firewall rule success", firewallRuleId)
@@ -1352,7 +1352,7 @@ func (n *Neutron) CreateFirewallV1(opts *entity.CreateFirewallOpts) string {
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name + strconv.FormatUint(n.snowflake.NextVal(), 10), consts.FIREWALL)
 	urlSuffix := "fw/firewalls"
 	reqBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var firewall entity.FirewallV1Map
 	_ = json.Unmarshal(resp, &firewall)
 
@@ -1390,7 +1390,7 @@ func (n *Neutron) ensureFirewallActive(firewallId string) {
 
 func (n *Neutron) UpdateFirewallV1(firewallId string, opts *entity.UpdateFirewallOpts) entity.FirewallV1Map {
 	urlSuffix := fmt.Sprintf("fw/firewalls/%s", firewallId)
-	resp := n.Put(n.headers, urlSuffix, opts.ToRequestBody())
+	resp := n.Put(n.Headers, urlSuffix, opts.ToRequestBody())
 	var firewall entity.FirewallV1Map
 	_ = json.Unmarshal(resp, &firewall)
 
@@ -1401,7 +1401,7 @@ func (n *Neutron) UpdateFirewallV1(firewallId string, opts *entity.UpdateFirewal
 func (n *Neutron) updateFirewallWithRouterV1(firewallGroupId, routerId string) string {
 	urlSuffix := fmt.Sprintf("fw/firewalls/%s", firewallGroupId)
 	reqBody := fmt.Sprintf("{\"firewall\": {\"router_id\": \"%+v\"}}", routerId)
-	n.Put(n.headers, urlSuffix, reqBody)
+	n.Put(n.Headers, urlSuffix, reqBody)
 
 	log.Println("==============update firewall success", firewallGroupId)
 	return firewallGroupId
@@ -1410,7 +1410,7 @@ func (n *Neutron) updateFirewallWithRouterV1(firewallGroupId, routerId string) s
 func (n *Neutron) updateFirewallGroupNoRoutersNoPoliciesV1(firewallGroupId string) map[string]interface{} {
 	urlSuffix := fmt.Sprintf("fw/firewalls/%s", firewallGroupId)
 	updateBody := `{"firewall": {"router_ids": []}}`
-	resp := n.DecorateResp(n.Put)(n.headers, urlSuffix, updateBody)
+	resp := n.DecorateResp(n.Put)(n.Headers, urlSuffix, updateBody)
 	firewallGroup := resp["firewall"].(map[string]interface{})
 
 	n.SyncResource(firewallGroupId, nil, firewallGroup)
@@ -1420,7 +1420,7 @@ func (n *Neutron) updateFirewallGroupNoRoutersNoPoliciesV1(firewallGroupId strin
 
 func (n *Neutron) ListFirewallV1s() entity.FirewallV1s {
 	urlSuffix := fmt.Sprintf("fw/firewalls?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var firewalls entity.FirewallV1s
 	_ = json.Unmarshal(resp, &firewalls)
 
@@ -1431,7 +1431,7 @@ func (n *Neutron) ListFirewallV1s() entity.FirewallV1s {
 
 func (n *Neutron) GetFirewall(firewallId string) entity.FirewallV1Map {
 	urlSuffix := fmt.Sprintf("fw/firewalls/%s", firewallId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var firewall entity.FirewallV1Map
 	_ = json.Unmarshal(resp, &firewall)
 
@@ -1451,7 +1451,7 @@ func (n *Neutron) deleteFirewallV1(id string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("fw/firewalls/%s", id)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -1476,7 +1476,7 @@ func (n *Neutron) CreateFirewallPolicyV1(opts *entity.CreateFirewallPolicyOpts) 
 	urlSuffix := "fw/firewall_policies"
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name + strconv.FormatUint(n.snowflake.NextVal(), 10), consts.FIREWALLPOLICY)
     reqBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, urlSuffix, string(reqBody))
+	resp := n.Post(n.Headers, urlSuffix, string(reqBody))
 	var firewallPolicy entity.FirewallPolicyV1Map
     _ = json.Unmarshal(resp, &firewallPolicy)
 	//cache.RedisClient.SetMap(n.tag + consts.FIREWALLPOLICIES, firewallPolicy.FirewallPolicy.Id, firewallPolicy)
@@ -1487,7 +1487,7 @@ func (n *Neutron) CreateFirewallPolicyV1(opts *entity.CreateFirewallPolicyOpts) 
 func (n *Neutron) updateFirewallPolicyNoRulesV1(firewallPolicyId string) map[string]interface{} {
 	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s", firewallPolicyId)
 	reqBody := `{"firewall_policy": {"firewall_rules": []}}`
-	resp := n.DecorateResp(n.Put)(n.headers, urlSuffix, reqBody)
+	resp := n.DecorateResp(n.Put)(n.Headers, urlSuffix, reqBody)
 	firewallPolicy := resp["firewall_policy"].(map[string]interface{})
 
 	n.SyncResource(firewallPolicyId, nil, firewallPolicy)
@@ -1499,7 +1499,7 @@ func (n *Neutron) UpdateFirewallPolicyInsertRuleV1(firewallPolicyId, ruleId stri
 	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s/insert_rule", firewallPolicyId)
 	formatter := `{"insert_after": "", "insert_before": "", "firewall_rule_id": "%+v"}`
 	reqBody := fmt.Sprintf(formatter, ruleId)
-	resp := n.Put(n.headers, urlSuffix, reqBody)
+	resp := n.Put(n.Headers, urlSuffix, reqBody)
 	var policy entity.FirewallPolicyV1Map
     _ = json.Unmarshal(resp, &policy)
 	//n.SyncMap(n.tag + consts.FIREWALLPOLICIES, firewallPolicyId, nil, policy)
@@ -1511,7 +1511,7 @@ func (n *Neutron) UpdateFirewallPolicyRemoveRuleV1(firewallPolicyId, ruleId stri
 	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s/remove_rule", firewallPolicyId)
 	formatter := `{"firewall_rule_id": "%+v"}`
 	reqBody := fmt.Sprintf(formatter, ruleId)
-	resp := n.Put(n.headers, urlSuffix, reqBody)
+	resp := n.Put(n.Headers, urlSuffix, reqBody)
 	var policy entity.FirewallPolicyV1Map
 	_ = json.Unmarshal(resp, &policy)
 	//n.SyncMap(n.tag + consts.FIREWALLPOLICIES, firewallPolicyId, nil, policy)
@@ -1522,7 +1522,7 @@ func (n *Neutron) UpdateFirewallPolicyRemoveRuleV1(firewallPolicyId, ruleId stri
 func (n *Neutron) updateFirewallPolicyV1(firewallPolicyId string) map[string]interface{} {
 	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s", firewallPolicyId)
 	reqBody := `{"firewall_policy": {"name": "dx"}}`
-	resp := n.DecorateResp(n.Put)(n.headers, urlSuffix, reqBody)
+	resp := n.DecorateResp(n.Put)(n.Headers, urlSuffix, reqBody)
 	firewallPolicy := resp["firewall_policy"].(map[string]interface{})
 
 	n.SyncResource(firewallPolicyId, nil, firewallPolicy)
@@ -1532,7 +1532,7 @@ func (n *Neutron) updateFirewallPolicyV1(firewallPolicyId string) map[string]int
 
 func (n *Neutron) GistFirewallPolicy(firewallPolicyId string) entity.FirewallPolicy {
 	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s", firewallPolicyId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var firewallPolicy entity.FirewallPolicy
 	_ = json.Unmarshal(resp, &firewallPolicy)
 	log.Printf("==============Get firewall policy success %+v\n", firewallPolicy)
@@ -1541,7 +1541,7 @@ func (n *Neutron) GistFirewallPolicy(firewallPolicyId string) entity.FirewallPol
 
 func (n *Neutron) listFirewallPoliciesV1() entity.FirewallPolicies {
 	urlSuffix := fmt.Sprintf("fw/firewall_policies?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var firewallPolicies entity.FirewallPolicies
 	_ = json.Unmarshal(resp, &firewallPolicies)
 	//cache.RedisClient.SetMap(n.tag + consts.FIREWALLPOLICIES, firewallPolicy.FirewallPolicy.Id, firewallPolicy)
@@ -1560,7 +1560,7 @@ func (n *Neutron) deleteFirewallPolicyV1(id string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s", id)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -1585,7 +1585,7 @@ func (n *Neutron) CreateFirewallRuleV1(opts *entity.CreateFirewallRuleOpts) stri
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name + strconv.FormatUint(n.snowflake.NextVal(), 10), consts.FIREWALLRULE)
 	urlSuffix := "fw/firewall_rules"
 	reqBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var firewallRule entity.FirewallRuleV1Map
     _ = json.Unmarshal(resp, &firewallRule)
     //cache.RedisClient.SetMap(n.tag + consts.FIREWALLRULES, firewallRule.FirewallRule.Id, firewallRule)
@@ -1615,7 +1615,7 @@ func (n *Neutron) CreateFirewallRuleV1(opts *entity.CreateFirewallRuleOpts) stri
 func (n *Neutron) insertRuleV1(firewallPolicyId, firewallRuleId string) {
 	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s/insert_rule", firewallPolicyId)
 	reqBody := fmt.Sprintf("{\"firewall_rule_id\": \"%+v\", \"insert_after\": \"\", \"insert_before\": \"\"}", firewallRuleId)
-	firewallPolicy := n.DecorateResp(n.Put)(n.headers, urlSuffix, reqBody)
+	firewallPolicy := n.DecorateResp(n.Put)(n.Headers, urlSuffix, reqBody)
 
 	n.SyncResource(firewallPolicyId, nil, firewallPolicy)
 	log.Println("==============insert firewall rule success", firewallRuleId)
@@ -1624,7 +1624,7 @@ func (n *Neutron) insertRuleV1(firewallPolicyId, firewallRuleId string) {
 func (n *Neutron) removeRuleV1(firewallPolicyId, firewallRuleId string) {
 	urlSuffix := fmt.Sprintf("fw/firewall_policies/%s/remove_rule", firewallPolicyId)
 	reqBody := fmt.Sprintf("{\"firewall_rule_id\": \"%+v\"}", firewallRuleId)
-	firewallPolicy := n.DecorateResp(n.Put)(n.headers, urlSuffix, reqBody)
+	firewallPolicy := n.DecorateResp(n.Put)(n.Headers, urlSuffix, reqBody)
 
 	n.SyncResource(firewallPolicyId, nil, firewallPolicy)
 	log.Println("==============remove firewall rule success", firewallRuleId)
@@ -1632,7 +1632,7 @@ func (n *Neutron) removeRuleV1(firewallPolicyId, firewallRuleId string) {
 
 func (n *Neutron) listFirewallRulesV1() entity.FirewallRules {
 	urlSuffix := fmt.Sprintf("fw/firewall_rules?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var firewallRules entity.FirewallRules
 	_ = json.Unmarshal(resp, &firewallRules)
 	//cache.RedisClient.SetMap(n.tag + consts.FIREWALLPOLICIES, firewallPolicy.FirewallPolicy.Id, firewallPolicy)
@@ -1651,7 +1651,7 @@ func (n *Neutron) DeleteFirewallRuleV1(id string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("fw/firewall_rules/%s", id)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -1674,7 +1674,7 @@ func (n *Neutron) DeleteFirewallRules() {
 func (n *Neutron) CreateSecurityGroup(opts *entity.CreateSecurityGroupOpts) string {
 	urlSuffix := "security-groups"
 	reqBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var sg entity.Sg
 	_ = json.Unmarshal(resp, &sg)
 
@@ -1685,7 +1685,7 @@ func (n *Neutron) CreateSecurityGroup(opts *entity.CreateSecurityGroupOpts) stri
 
 func (n *Neutron) getSecurityGroup(sgId string) interface{} {
 	urlSuffix := fmt.Sprintf("security-groups/%s", sgId)
-    resp := n.Get(n.headers, urlSuffix)
+    resp := n.Get(n.Headers, urlSuffix)
     var sg entity.Sg
     _ = json.Unmarshal(resp, &sg)
     log.Println(fmt.Sprintf("get sg==%+v", sg))
@@ -1694,7 +1694,7 @@ func (n *Neutron) getSecurityGroup(sgId string) interface{} {
 
 func (n *Neutron) listSecurityGroupByName(sgName string) entity.Sgs {
 	urlSuffix := fmt.Sprintf("security-groups?name=%s", sgName)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var sgs entity.Sgs
 	_ = json.Unmarshal(resp, &sgs)
 	log.Println("==============List sg success, there had", sgs.Count)
@@ -1703,7 +1703,7 @@ func (n *Neutron) listSecurityGroupByName(sgName string) entity.Sgs {
 
 func (n *Neutron) listSecurityGroups() entity.Sgs {
 	urlSuffix := fmt.Sprintf("security-groups?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var sgs entity.Sgs
 	_ = json.Unmarshal(resp, &sgs)
 	log.Println("==============List sg success, there had", len(sgs.Sgs))
@@ -1732,7 +1732,7 @@ func (n *Neutron) deleteSecurityGroup(id string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("security-groups/%s", id)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -1781,7 +1781,7 @@ func (n *Neutron) EnsureSgExist(sgName string) {
 // security group rule
 func (n *Neutron) CreateSecurityGroupRule(reqBody string) {
 	urlSuffix := "security-group-rules"
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var sgRule entity.SgRule
 	_ = json.Unmarshal(resp, &sgRule)
 
@@ -1815,7 +1815,7 @@ func (n *Neutron) constructSSHRule(sgId string) (string, string) {
 
 func (n *Neutron) listSecurityGroupRules() entity.SgRules {
 	urlSuffix := fmt.Sprintf("security-group-rules?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var sgRules entity.SgRules
 	_ = json.Unmarshal(resp, &sgRules)
 
@@ -1835,7 +1835,7 @@ func (n *Neutron) deleteSecurityGroupRule(id string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("security-group-rules/%s", id)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -1859,7 +1859,7 @@ func (n *Neutron) DeleteSecurityGroupRules() {
 func (n *Neutron) CreateRbacPolicy(objectType, objectId, targetTenant string) string {
 	urlSuffix := "rbac-policies"
 	reqBody := fmt.Sprintf("{\"rbac_policy\": {\"action\": \"access_as_shared\", \"object_type\": \"%+v\", \"target_tenant\": \"%+v\", \"object_id\": \"%+v\"}}", objectType, targetTenant, objectId)
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var rp entity.RbacPolicyMap
 	_ = json.Unmarshal(resp, &rp)
 
@@ -1885,7 +1885,7 @@ func (n *Neutron) createSGRbacPolicy(objectId, targetTenant string) string {
 
 func (n *Neutron) deleteRbacPolicy(rbacPolicyId string) {
 	urlSuffix := fmt.Sprintf("rbac-policies/%s", rbacPolicyId)
-	if ok, _ := n.Delete(n.headers, urlSuffix); ok {
+	if ok, _ := n.Delete(n.Headers, urlSuffix); ok {
 		//cache.RedisClient.DeleteMap(n.tag + consts.RBACPOLICIES, rbacPolicyId)
 		log.Println("==============Delete rbac policy success", rbacPolicyId)
 		return
@@ -1895,7 +1895,7 @@ func (n *Neutron) deleteRbacPolicy(rbacPolicyId string) {
 
 func (n *Neutron) getRbacPolicy(rbacPolicyId string) interface{} {
 	urlSuffix := fmt.Sprintf("rbac-policies/%s", rbacPolicyId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var rp entity.RbacPolicyMap
 	_ = json.Unmarshal(resp, &rp)
 	log.Println(fmt.Sprintf("rbac policy==%+v", rp))
@@ -1915,7 +1915,7 @@ func (n *Neutron) CreateVpnService(routerId string) string {
 	urlSuffix := "vpn/vpnservices"
 	name := "vpn_service_" + strconv.FormatUint(n.snowflake.NextVal(), 10)
 	reqBody := fmt.Sprintf("{\"vpnservice\": {\"name\": \"%+v\", \"router_id\": \"%+v\"}}", name, routerId)
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var vs entity.VpnServiceMap
 	_ = json.Unmarshal(resp, &vs)
 
@@ -1927,7 +1927,7 @@ func (n *Neutron) CreateVpnService(routerId string) string {
 func (n *Neutron) deleteVpnService(vpnServiceId string) {
 	defer n.wg.Done()
 	urlSuffix := fmt.Sprintf("vpn/vpnservices/%s", vpnServiceId)
-	if ok, _ := n.Delete(n.headers, urlSuffix); ok {
+	if ok, _ := n.Delete(n.Headers, urlSuffix); ok {
 		//cache.RedisClient.DeleteMap(n.tag + consts.VPNSERVICES, vpnServiceId)
 		log.Println("==============Delete vpn service success", vpnServiceId)
 		return
@@ -1937,7 +1937,7 @@ func (n *Neutron) deleteVpnService(vpnServiceId string) {
 
 func (n *Neutron) getVpnService(vpnServiceId string) entity.VpnServiceMap {
 	urlSuffix := fmt.Sprintf("vpn/vpnservices/%s", vpnServiceId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var vs entity.VpnServiceMap
 	_ = json.Unmarshal(resp, &vs)
 	return vs
@@ -1945,7 +1945,7 @@ func (n *Neutron) getVpnService(vpnServiceId string) entity.VpnServiceMap {
 
 func (n *Neutron) listVpnServices() entity.VpnServices {
 	urlSuffix := fmt.Sprintf("vpn/vpnservices?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ips entity.VpnServices
 	_ = json.Unmarshal(resp, &ips)
 	log.Println("==============List vpn service success, there had", ips.Count)
@@ -1965,7 +1965,7 @@ func (n *Neutron) DeleteVpnServices() {
 // endpoint group
 func (n *Neutron) createEndpointGroup(reqBody string) string {
 	urlSuffix := "vpn/endpoint-groups"
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var eg entity.EndpointGroupMap
 	_ = json.Unmarshal(resp, &eg)
 
@@ -2023,7 +2023,7 @@ func (n *Neutron) CreatePeerEndpointGroup(peerCidr string) string {
 func (n *Neutron) DeleteEndpointGroup(egId string) {
 	defer n.wg.Done()
 	urlSuffix := fmt.Sprintf("vpn/endpoint-groups/%s", egId)
-	if ok, _ := n.Delete(n.headers, urlSuffix); ok {
+	if ok, _ := n.Delete(n.Headers, urlSuffix); ok {
 		//cache.RedisClient.DeleteMap(n.tag + consts.ENDPOINTGROUPS, egId)
 		log.Println("==============Delete endpoint group success", egId)
 		return
@@ -2033,7 +2033,7 @@ func (n *Neutron) DeleteEndpointGroup(egId string) {
 
 func (n *Neutron) getEndpointGroup(egId string) entity.EndpointGroupMap {
 	urlSuffix := fmt.Sprintf("vpn/endpoint-groups/%s", egId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var eg entity.EndpointGroupMap
 	_ = json.Unmarshal(resp, &eg)
 	return eg
@@ -2041,7 +2041,7 @@ func (n *Neutron) getEndpointGroup(egId string) entity.EndpointGroupMap {
 
 func (n *Neutron) listEndpointGroups() entity.EndpointGroups {
 	urlSuffix := fmt.Sprintf("vpn/endpoint-groups?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ips entity.EndpointGroups
 	_ = json.Unmarshal(resp, &ips)
 	log.Println("==============List endpoint group success, there had", ips.Count)
@@ -2078,7 +2078,7 @@ func (n *Neutron) CreateIkePolicy() string {
                       }
                    }`
 	reqBody := fmt.Sprintf(formatter, name)
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var ip entity.IkePolicyMap
 	_ = json.Unmarshal(resp, &ip)
 
@@ -2090,7 +2090,7 @@ func (n *Neutron) CreateIkePolicy() string {
 func (n *Neutron) DeleteIkePolicy(ipId string) {
 	defer n.wg.Done()
 	urlSuffix := fmt.Sprintf("vpn/ikepolicies/%s", ipId)
-	if ok, _ := n.Delete(n.headers, urlSuffix); ok {
+	if ok, _ := n.Delete(n.Headers, urlSuffix); ok {
 		//cache.RedisClient.DeleteMap(n.tag + consts.IKEPOLICIES, ipId)
 		log.Println("==============Delete ike policy success", ipId)
 		return
@@ -2100,7 +2100,7 @@ func (n *Neutron) DeleteIkePolicy(ipId string) {
 
 func (n *Neutron) getIkePolicy(ipId string) entity.IkePolicyMap {
 	urlSuffix := fmt.Sprintf("vpn/ikepolicies/%s", ipId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var ip entity.IkePolicyMap
 	_ = json.Unmarshal(resp, &ip)
 	return ip
@@ -2108,7 +2108,7 @@ func (n *Neutron) getIkePolicy(ipId string) entity.IkePolicyMap {
 
 func (n *Neutron) listIkePolicies() entity.IpsecPolicies {
 	urlSuffix := fmt.Sprintf("vpn/ikepolicies?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ips entity.IpsecPolicies
 	_ = json.Unmarshal(resp, &ips)
 	log.Println("==============List ike policy success, there had", ips.Count)
@@ -2145,7 +2145,7 @@ func (n *Neutron) CreateIpsecPolicy() string {
                       }
                    }`
 	reqBody := fmt.Sprintf(formatter, name)
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var ip entity.IpsecPolicyMap
 	_ = json.Unmarshal(resp, &ip)
 
@@ -2157,7 +2157,7 @@ func (n *Neutron) CreateIpsecPolicy() string {
 func (n *Neutron) deleteIpsecPolicy(ipId string) {
 	defer n.wg.Done()
 	urlSuffix := fmt.Sprintf("vpn/ipsecpolicies/%s", ipId)
-	if ok, _ := n.Delete(n.headers, urlSuffix) ; ok{
+	if ok, _ := n.Delete(n.Headers, urlSuffix) ; ok{
 		//cache.RedisClient.DeleteMap(n.tag + consts.IPSECPOLICIES, ipId)
 		log.Println("==============Delete ipsec policy success", ipId)
 		return
@@ -2167,7 +2167,7 @@ func (n *Neutron) deleteIpsecPolicy(ipId string) {
 
 func (n *Neutron) getIpsecPolicy(ipId string) entity.IpsecPolicyMap {
 	urlSuffix := fmt.Sprintf("vpn/ipsecpolicies/%s", ipId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var ip entity.IpsecPolicyMap
 	_ = json.Unmarshal(resp, &ip)
 	return ip
@@ -2175,7 +2175,7 @@ func (n *Neutron) getIpsecPolicy(ipId string) entity.IpsecPolicyMap {
 
 func (n *Neutron) listIpsecPolicies() entity.IpsecPolicies {
 	urlSuffix := fmt.Sprintf("vpn/ipsecpolicies?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ips entity.IpsecPolicies
 	_ = json.Unmarshal(resp, &ips)
 	log.Println("==============List ipsec policy success, there had", ips.Count)
@@ -2215,7 +2215,7 @@ func (n *Neutron) CreateIpsecConnection(vpnServiceId, ikePolicyId, ipsecPolicyId
                       }
                    }`
 	reqBody := fmt.Sprintf(formatter, ipsecPolicyId, peerEGId, ikePolicyId, vpnServiceId, localEGId, peerAddress, peerAddress, name)
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var ip entity.IpsecConnectionMap
 	_ = json.Unmarshal(resp, &ip)
 
@@ -2227,7 +2227,7 @@ func (n *Neutron) CreateIpsecConnection(vpnServiceId, ikePolicyId, ipsecPolicyId
 func (n *Neutron) deleteIpsecConnection(ipId string) {
 	defer n.wg.Done()
 	urlSuffix := fmt.Sprintf("vpn/ipsec-site-connections/%s", ipId)
-	if ok, _ := n.Delete(n.headers, urlSuffix); ok {
+	if ok, _ := n.Delete(n.Headers, urlSuffix); ok {
 		//cache.RedisClient.DeleteMap(n.tag + consts.IPSECCONNECTIONS, ipId)
 		log.Println("==============Delete ipsec connection success", ipId)
 		return
@@ -2237,7 +2237,7 @@ func (n *Neutron) deleteIpsecConnection(ipId string) {
 
 func (n *Neutron) getIpsecConnection(ipId string) entity.IpsecConnectionMap {
 	urlSuffix := fmt.Sprintf("vpn/ipsec-site-connections/%s", ipId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var ip entity.IpsecConnectionMap
 	_ = json.Unmarshal(resp, &ip)
 	return ip
@@ -2245,7 +2245,7 @@ func (n *Neutron) getIpsecConnection(ipId string) entity.IpsecConnectionMap {
 
 func (n *Neutron) listIpsecConnection() entity.IpsecConnections {
 	urlSuffix := fmt.Sprintf("vpn/ipsec-site-connections?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ics entity.IpsecConnections
 	_ = json.Unmarshal(resp, &ics)
 	log.Println("==============List ipsec connection success, there had", ics.Count)
@@ -2268,7 +2268,7 @@ func (n *Neutron) CreateVpcConnection(opts *entity.CreateVpcConnectionOpts) stri
 	urlSuffix := "vpc-connections"
 	opts.Name = fmt.Sprintf("%s_%s", opts.Name + strconv.FormatUint(n.snowflake.NextVal(), 10), consts.VpcConnection)
 	reqBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, urlSuffix, reqBody)
+	resp := n.Post(n.Headers, urlSuffix, reqBody)
 	var vc entity.VpcConnectionMap
 	_ = json.Unmarshal(resp, &vc)
 
@@ -2280,7 +2280,7 @@ func (n *Neutron) CreateVpcConnection(opts *entity.CreateVpcConnectionOpts) stri
 func (n *Neutron) UpdateVpcConnection(vpcConnId string, opts *entity.UpdateVpcConnectionOpts) string {
 	urlSuffix := fmt.Sprintf("vpc-connections/%s", vpcConnId)
 	reqBody := opts.ToRequestBody()
-	resp := n.Put(n.headers, urlSuffix, reqBody)
+	resp := n.Put(n.Headers, urlSuffix, reqBody)
 	var vc entity.VpcConnectionMap
 	_ = json.Unmarshal(resp, &vc)
 
@@ -2290,7 +2290,7 @@ func (n *Neutron) UpdateVpcConnection(vpcConnId string, opts *entity.UpdateVpcCo
 
 func (n *Neutron) GetVpcConnection(ipId string) entity.VpcConnectionMap {
 	urlSuffix := fmt.Sprintf("vpc-connections/%s", ipId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	var ip entity.VpcConnectionMap
 	_ = json.Unmarshal(resp, &ip)
 	log.Println("==============Get vpc connection success", ipId)
@@ -2299,7 +2299,7 @@ func (n *Neutron) GetVpcConnection(ipId string) entity.VpcConnectionMap {
 
 func (n *Neutron) ListVpcConnections() entity.VpcConnections {
 	urlSuffix := fmt.Sprintf("vpc-connections?tenant_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var ics entity.VpcConnections
 	_ = json.Unmarshal(resp, &ics)
 	log.Println("==============List vpc connection success, there had", len(ics.Vcs))
@@ -2317,7 +2317,7 @@ func (n *Neutron) DeleteVpcConnection(id string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("vpc-connections/%s", id)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -2342,13 +2342,13 @@ func (n *Neutron) DeleteVpcConnections() {
 
 func (n *Neutron) GetCompareResults() {
 	urlSuffix := "compare_results"
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	log.Println(string(resp))
 }
 
 func (n *Neutron) GetSyncResults() {
 	urlSuffix := "sync_results"
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	log.Println(string(resp))
 	var syncResults entity.SyncResultsMap
 	_ = json.Unmarshal(resp, &syncResults)
@@ -2357,7 +2357,7 @@ func (n *Neutron) GetSyncResults() {
 
 func (n *Neutron) GetSyncSummaryResults() {
 	urlSuffix := "sync_results?sync_summary=true"
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	log.Println(string(resp))
 	var syncResults entity.SyncSummaryResult
 	_ = json.Unmarshal(resp, &syncResults)
@@ -2367,21 +2367,21 @@ func (n *Neutron) GetSyncSummaryResults() {
 
 func (n *Neutron) ResourceSync() {
 	urlSuffix := "resourcesyncs"
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	log.Println(string(resp))
 	log.Println("==============List resource sync success")
 }
 
 func (n *Neutron) ListAcConfig() {
 	urlSuffix := "ac_config"
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	log.Println(string(resp))
 	log.Println("==============List ac config success")
 }
 
 func (n *Neutron) CreateAcConfig() {
 	urlSuffix := "ac_config"
-	resp := n.Post(n.headers, urlSuffix, "{\"ac_config\": {}}")
+	resp := n.Post(n.Headers, urlSuffix, "{\"ac_config\": {}}")
 	log.Println(string(resp))
 	log.Println("==============Create ac config success")
 }
@@ -2390,13 +2390,13 @@ func (n *Neutron) CreateAcConfig() {
 
 func (n *Neutron) ListQuotas()  {
 	urlSuffix := "quotas"
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	log.Println(string(resp))
 }
 
 func (n *Neutron) ListQuotaForProject()  {
     urlSuffix := fmt.Sprintf("quotas/%s", n.projectId)
-    resp := n.Get(n.headers, urlSuffix)
+    resp := n.Get(n.Headers, urlSuffix)
     log.Println(string(resp))
 }
 
@@ -2407,25 +2407,25 @@ func (n *Neutron) UpdateQuotaForProject() {
 		Firewall: -1,
 	}}
     reqBody := opts.ToRequestBody()
-	resp := n.Put(n.headers, urlSuffix, reqBody)
+	resp := n.Put(n.Headers, urlSuffix, reqBody)
 	log.Println(string(resp))
 }
 
 func (n *Neutron) ListDefaultQuotaForProject()  {
 	urlSuffix := fmt.Sprintf("quotas/%s/default", n.projectId)
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	log.Println(string(resp))
 }
 
 func (n *Neutron) ResetQuotaForProject() {
 	urlSuffix := fmt.Sprintf("quotas/%s", n.projectId)
-	n.Delete(n.headers, urlSuffix)
+	n.Delete(n.Headers, urlSuffix)
 }
 
 func (n *Neutron) ShowQuotaDetailsForProject()  {
 	//urlSuffix := fmt.Sprintf("quotas/%s/details", n.projectId)
 	urlSuffix := "quotas/7e8babd4464e4c6da382a1a29d8da53a/details"
-	resp := n.Get(n.headers, urlSuffix)
+	resp := n.Get(n.Headers, urlSuffix)
 	log.Println(string(resp))
 }
 
@@ -2433,7 +2433,7 @@ func (n *Neutron) ShowQuotaDetailsForProject()  {
 
 func (n *Neutron) ListServiceProviders() {
 	urlSuffix := "service-providers"
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	log.Println(string(resp))
 }
 
@@ -2442,7 +2442,7 @@ func (n *Neutron) ListServiceProviders() {
 func (n *Neutron) CreateSnat(opts *entity.Snat) entity.SnatMap {
 	urlSuffix := consts.Snats
 	createBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, urlSuffix, createBody)
+	resp := n.Post(n.Headers, urlSuffix, createBody)
 	var snat entity.SnatMap
 	_ = json.Unmarshal(resp, &snat)
 
@@ -2452,7 +2452,7 @@ func (n *Neutron) CreateSnat(opts *entity.Snat) entity.SnatMap {
 
 func (n *Neutron) ListSnats() entity.Snats {
 	urlSuffix := fmt.Sprintf("snats?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var snats entity.Snats
 	_ = json.Unmarshal(resp, &snats)
 	log.Printf("snats==%+v\n", snats)
@@ -2471,7 +2471,7 @@ func (n *Neutron) DeleteSnat(snatId string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("snats/%s", snatId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 
@@ -2494,7 +2494,7 @@ func (n *Neutron) DeleteSnats() {
 func (n *Neutron) CreateDnat(opts *entity.Dnat) entity.DnatMap {
 	urlSuffix := consts.Dnats
 	createBody := opts.ToRequestBody()
-	resp := n.Post(n.headers, urlSuffix, createBody)
+	resp := n.Post(n.Headers, urlSuffix, createBody)
 	var dnat entity.DnatMap
 	_ = json.Unmarshal(resp, &dnat)
 
@@ -2504,7 +2504,7 @@ func (n *Neutron) CreateDnat(opts *entity.Dnat) entity.DnatMap {
 
 func (n *Neutron) ListDnats() entity.Dnats {
 	urlSuffix := fmt.Sprintf("dnats?project_id=%s", n.projectId)
-	resp := n.List(n.headers, urlSuffix)
+	resp := n.List(n.Headers, urlSuffix)
 	var dnats entity.Dnats
 	_ = json.Unmarshal(resp, &dnats)
 	log.Printf("dnats==%+v\n", dnats)
@@ -2523,7 +2523,7 @@ func (n *Neutron) DeleteDnat(dnatId string) Output {
 	}()
 
 	urlSuffix := fmt.Sprintf("dnats/%s", dnatId)
-	outputObj.Success, outputObj.Response = n.Delete(n.headers, urlSuffix)
+	outputObj.Success, outputObj.Response = n.Delete(n.Headers, urlSuffix)
 	return outputObj
 }
 

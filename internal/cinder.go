@@ -102,22 +102,22 @@ func (c *Cinder) UpdateVolumeType(volumeTypeId, name, desc string) entity.Volume
 }
 
 func (c *Cinder) constructVolumeTypeSSD(size int) string {
-	name := fmt.Sprintf("SEBS-ssd-%d", size)
-	description := fmt.Sprintf("ssd硬盘-%dG", size)
+	name := fmt.Sprintf("SSD-%d", size)
+	description := fmt.Sprintf("SEBS-ssd-%dG", size)
 	reqBody := fmt.Sprintf("{\"volume_type\": {\"name\": \"%+v\", \"description\": \"%+v\"}}", name, description)
 	return reqBody
 }
 
 func (c *Cinder) constructVolumeTypeEfficient(size int) string {
-	name := fmt.Sprintf("SEBS-efficient-%d", size)
-	description := fmt.Sprintf("高效硬盘-%dG", size)
+	name := fmt.Sprintf("高效硬盘-%d", size)
+	description := fmt.Sprintf("SEBS-efficient-%dG", size)
 	reqBody := fmt.Sprintf("{\"volume_type\": {\"name\": \"%+v\", \"description\": \"%+v\"}}", name, description)
 	return reqBody
 }
 
 func (c *Cinder) constructVolumeTypeCommon() string {
-	name := "SEBS-common-0"
-	description := "普通硬盘"
+	name := "普通硬盘"
+	description := "SEBS-common"
 	reqBody := fmt.Sprintf("{\"volume_type\": {\"name\": \"%+v\", \"description\": \"%+v\"}}", name, description)
 	return reqBody
 }

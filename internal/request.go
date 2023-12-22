@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"request_openstack/consts"
@@ -21,8 +23,8 @@ type Request struct {
 }
 
 func NewClient() (client *fasthttp.Client) {
-	readTimeout, _ := time.ParseDuration("500000ms")
-	writeTimeout, _ := time.ParseDuration("500000ms")
+	readTimeout, _ := time.ParseDuration("5000000ms")
+	writeTimeout, _ := time.ParseDuration("5000000ms")
 	maxIdleConnDuration, _ := time.ParseDuration("1h")
 	client = &fasthttp.Client{
 		ReadTimeout:                   readTimeout,
@@ -83,158 +85,159 @@ func NewSSLClient() (client *fasthttp.Client) {
 	}
 	return client
 }
-
-func (r *Request) Post(headers map[string]string, urlSuffix string, body string) []byte {
-    reqURL := r.UrlPrefix + urlSuffix
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	req.SetRequestURI(reqURL)
-	req.Header.SetContentType(consts.ContentTypeJson)
-	req.Header.SetMethod(consts.POST)
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	req.SetBody([]byte(body))
-
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-	log.Printf("Starting to Post request %s", reqURL)
-	if err := r.Client.Do(req, resp); err != nil {
-		errorInfo := fmt.Sprintf("POST error do request %s", err)
-		log.Println(errorInfo)
-		panic(errorInfo)
-	}
-	if resp.StatusCode() > 204 {
-		errorInfo := fmt.Sprintf("POST request %s failed, resp==%s", reqURL, resp.Body())
-		log.Printf(errorInfo)
-		panic(errorInfo)
-	}
-	log.Printf("Post request %s success", reqURL)
-	res := resp.Body()
-	return res
-}
-
-func (r *Request) Put(headers map[string]string, urlSuffix string, body string) []byte {
-	reqURL := r.UrlPrefix + urlSuffix
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	req.SetRequestURI(reqURL)
-	req.Header.SetContentType(consts.ContentTypeJson)
-	req.Header.SetMethod(consts.PUT)
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	req.SetBody([]byte(body))
-
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-	log.Printf("Starting to Put request %s", reqURL)
-	if err := r.Client.Do(req, resp); err != nil {
-		errorInfo := fmt.Sprintf("PUT request err==%s", err)
-		log.Printf(errorInfo)
-		panic(errorInfo)
-	}
-	if resp.StatusCode() > 204 {
-		errorInfo := fmt.Sprintf("PUT request %s failed, resp==%s", urlSuffix, resp.Body())
-		log.Printf(errorInfo)
-		panic(errorInfo)
-	}
-	log.Printf("Put request %s success", reqURL)
-	res := resp.Body()
-	return res
-}
-
-func (r *Request) Delete(headers map[string]string, urlSuffix string) (bool, string)  {
-	reqURL := r.UrlPrefix + urlSuffix
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	req.SetRequestURI(reqURL)
-	req.Header.SetMethod(consts.DELETE)
-	req.Header.SetContentType(consts.ContentTypeJson)
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-	log.Printf("Start to Delete request %s", reqURL)
-	if err := r.Client.Do(req, resp); err != nil {
-		errorInfo := fmt.Sprintf("Delete failed err==%s", err)
-	    log.Println(errorInfo)
-		panic(errorInfo)
-	}
-	res := resp.Body()
-	if resp.StatusCode() == 404 {
-		log.Printf("Delete request %s, resp==%s", urlSuffix, resp.Body())
-		return true, string(res)
-	} else if resp.StatusCode() > 204 {
-		log.Printf("Delete request %s failed, resp==%s", urlSuffix, resp.Body())
-		return false, string(res)
-	} else {
-		log.Printf("Delete request %s success", reqURL)
-		return true, ""
-	}
-}
-
-func (r *Request) Get(headers map[string]string, urlSuffix string) []byte {
-	reqURL := r.UrlPrefix + urlSuffix
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	req.SetRequestURI(reqURL)
-	req.Header.SetMethod(consts.GET)
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-	log.Printf("Start to Get request %s", urlSuffix)
-	if err := r.Client.Do(req, resp); err != nil {
-		panic("get error")
-	}
-	if resp.StatusCode() > 204 {
-		log.Printf("Get request %s failed, resp==%s", urlSuffix, resp.Body())
-		return nil
-	}
-	res := resp.Body()
-	log.Printf("Get request %s success", reqURL)
-	return res
-}
-
-
-func (r *Request) List(headers map[string]string, urlSuffix string) []byte {
-	reqURL := r.UrlPrefix + urlSuffix
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	req.SetRequestURI(reqURL)
-	req.Header.SetMethod(consts.GET)
-
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	resp := fasthttp.AcquireResponse()
-	resp.Header.SetContentType(consts.ContentTypeJson)
-	defer fasthttp.ReleaseResponse(resp)
-	log.Printf("Start to List request %s", reqURL)
-	if err := r.Client.Do(req, resp); err != nil {
-		log.Println("err==", err)
-		panic("List error")
-	}
-	if resp.StatusCode() > 202 {
-		log.Printf("List request %s failed, resp==%s", reqURL, resp.Body())
-		return nil
-	}
-	res := resp.Body()
-	log.Printf("List request %s sucess", reqURL)
-	return res
-}
+//
+//func (r *Request) Post(headers map[string]string, urlSuffix string, body string) []byte {
+//    reqURL := r.UrlPrefix + urlSuffix
+//	req := fasthttp.AcquireRequest()
+//	defer fasthttp.ReleaseRequest(req)
+//
+//	req.SetRequestURI(reqURL)
+//	req.Header.SetContentType(consts.ContentTypeJson)
+//	req.Header.SetMethod(consts.POST)
+//	for k, v := range headers {
+//		req.Header.Set(k, v)
+//	}
+//	req.SetBody([]byte(body))
+//
+//	resp := fasthttp.AcquireResponse()
+//	defer fasthttp.ReleaseResponse(resp)
+//	log.Printf("Starting to Post request %s", reqURL)
+//	if err := r.Client.Do(req, resp); err != nil {
+//		errorInfo := fmt.Sprintf("POST error do request %s", err)
+//		log.Println(errorInfo)
+//		panic(errorInfo)
+//	}
+//	if resp.StatusCode() > 204 {
+//		errorInfo := fmt.Sprintf("POST request %s failed, resp==%s", reqURL, resp.Body())
+//		log.Printf(errorInfo)
+//		panic(errorInfo)
+//	}
+//	log.Printf("Post request %s success", reqURL)
+//	res := resp.Body()
+//	return res
+//}
+//
+//func (r *Request) Put(headers map[string]string, urlSuffix string, body string) []byte {
+//	reqURL := r.UrlPrefix + urlSuffix
+//	req := fasthttp.AcquireRequest()
+//	defer fasthttp.ReleaseRequest(req)
+//
+//	req.SetRequestURI(reqURL)
+//	req.Header.SetContentType(consts.ContentTypeJson)
+//	req.Header.SetMethod(consts.PUT)
+//	for k, v := range headers {
+//		req.Header.Set(k, v)
+//	}
+//
+//	req.SetBody([]byte(body))
+//
+//	resp := fasthttp.AcquireResponse()
+//	defer fasthttp.ReleaseResponse(resp)
+//	log.Printf("Starting to Put request %s", reqURL)
+//	if err := r.Client.Do(req, resp); err != nil {
+//		errorInfo := fmt.Sprintf("PUT request err==%s", err)
+//		log.Printf(errorInfo)
+//		panic(errorInfo)
+//	}
+//	if resp.StatusCode() > 204 {
+//		errorInfo := fmt.Sprintf("PUT request %s failed, resp==%s", urlSuffix, resp.Body())
+//		log.Printf(errorInfo)
+//		panic(errorInfo)
+//	}
+//	log.Printf("Put request %s success", reqURL)
+//	res := resp.Body()
+//	return res
+//}
+//
+//func (r *Request) Delete(headers map[string]string, urlSuffix string) (bool, string)  {
+//	reqURL := r.UrlPrefix + urlSuffix
+//	req := fasthttp.AcquireRequest()
+//	defer fasthttp.ReleaseRequest(req)
+//
+//	req.SetRequestURI(reqURL)
+//	req.Header.SetMethod(consts.DELETE)
+//	req.Header.SetContentType(consts.ContentTypeJson)
+//	for k, v := range headers {
+//		req.Header.Set(k, v)
+//	}
+//
+//	resp := fasthttp.AcquireResponse()
+//	defer fasthttp.ReleaseResponse(resp)
+//	log.Printf("Start to Delete request %s", reqURL)
+//	if err := r.Client.Do(req, resp); err != nil {
+//		errorInfo := fmt.Sprintf("Delete failed err==%s", err)
+//	    log.Println(errorInfo)
+//		panic(errorInfo)
+//	}
+//	res := resp.Body()
+//	if resp.StatusCode() == 404 {
+//		log.Printf("Delete request %s, resp==%s", urlSuffix, resp.Body())
+//		return true, string(res)
+//	} else if resp.StatusCode() > 204 {
+//		log.Printf("Delete request %s failed, resp==%s", urlSuffix, resp.Body())
+//		return false, string(res)
+//	} else {
+//		log.Printf("Delete request %s success", reqURL)
+//		return true, ""
+//	}
+//}
+//
+//func (r *Request) Get(headers map[string]string, urlSuffix string) []byte {
+//	reqURL := r.UrlPrefix + urlSuffix
+//	req := fasthttp.AcquireRequest()
+//	defer fasthttp.ReleaseRequest(req)
+//
+//	req.SetRequestURI(reqURL)
+//	req.Header.SetMethod(consts.GET)
+//	for k, v := range headers {
+//		req.Header.Set(k, v)
+//	}
+//
+//	resp := fasthttp.AcquireResponse()
+//	defer fasthttp.ReleaseResponse(resp)
+//	log.Printf("Start to Get request %s", urlSuffix)
+//	if err := r.Client.Do(req, resp); err != nil {
+//		log.Println("########get err", err)
+//		panic("get error")
+//	}
+//	if resp.StatusCode() > 204 {
+//		log.Printf("Get request %s failed, resp==%s", urlSuffix, resp.Body())
+//		return nil
+//	}
+//	res := resp.Body()
+//	log.Printf("Get request %s success", reqURL)
+//	return res
+//}
+//
+//
+//func (r *Request) List(headers map[string]string, urlSuffix string) []byte {
+//	reqURL := r.UrlPrefix + urlSuffix
+//	req := fasthttp.AcquireRequest()
+//	defer fasthttp.ReleaseRequest(req)
+//
+//	req.SetRequestURI(reqURL)
+//	req.Header.SetMethod(consts.GET)
+//
+//	for k, v := range headers {
+//		req.Header.Set(k, v)
+//	}
+//
+//	resp := fasthttp.AcquireResponse()
+//	resp.Header.SetContentType(consts.ContentTypeJson)
+//	defer fasthttp.ReleaseResponse(resp)
+//	log.Printf("Start to List request %s", reqURL)
+//	if err := r.Client.Do(req, resp); err != nil {
+//		log.Println("err==", err)
+//		panic("List error")
+//	}
+//	if resp.StatusCode() > 202 {
+//		log.Printf("List request %s failed, resp==%s", reqURL, resp.Body())
+//		return nil
+//	}
+//	res := resp.Body()
+//	log.Printf("List request %s sucess", reqURL)
+//	return res
+//}
 
 func (r *Request) Patch(headers map[string]string, urlSuffix string, body string) []byte {
 	reqURL := r.UrlPrefix + urlSuffix
@@ -343,4 +346,167 @@ func (r *Request) DecorateGetResp(f func(headers map[string]string, urlSuffix st
 	}
 }
 
+// #################################################
+
+func (r *Request) Post(headers map[string]string, urlSuffix string, body string) []byte {
+	reqURL := r.UrlPrefix + urlSuffix
+    req, err := http.NewRequest(consts.POST, reqURL, bytes.NewBufferString(body))
+    if err != nil {
+    	log.Fatalln("new request error", err)
+	}
+	req.Header.Set("Content-Type", consts.ContentTypeJson)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	cli := &http.Client{Timeout: 5 * 60 * time.Second}
+	log.Printf("Starting to POST request %s", reqURL)
+	resp, err := cli.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		log.Println("post err", err)
+		panic("post err")
+	}
+	res := resp.Body
+	resBody, err := ioutil.ReadAll(res)
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode > 204 {
+		errorInfo := fmt.Sprintf("POST request %s failed, resp==%s", reqURL, resBody)
+		log.Printf(errorInfo)
+		panic(errorInfo)
+	}
+	log.Printf("Post request %s success", reqURL)
+
+	return resBody
+}
+
+func (r *Request) Put(headers map[string]string, urlSuffix string, body string) []byte {
+	reqURL := r.UrlPrefix + urlSuffix
+	req, err := http.NewRequest(consts.PUT, reqURL, bytes.NewBufferString(body))
+	if err != nil {
+		log.Fatalln("new request error", err)
+	}
+	req.Header.Set("Content-Type", consts.ContentTypeJson)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	cli := &http.Client{Timeout: 5 * 60 * time.Second}
+	log.Printf("Starting to PUT request %s", reqURL)
+	resp, err := cli.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		log.Println("post err", err)
+		panic("put err")
+	}
+	res := resp.Body
+	resBody, err := ioutil.ReadAll(res)
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode > 204 {
+		errorInfo := fmt.Sprintf("PUT request %s failed, resp==%s", urlSuffix, resBody)
+		log.Printf(errorInfo)
+		panic(errorInfo)
+	}
+	log.Printf("Put request %s success", reqURL)
+	return resBody
+}
+
+func (r *Request) Delete(headers map[string]string, urlSuffix string) (bool, string)  {
+	reqURL := r.UrlPrefix + urlSuffix
+	req, err := http.NewRequest(consts.DELETE, reqURL, nil)
+	if err != nil {
+		log.Fatalln("new request error", err)
+	}
+	req.Header.Set("Content-Type", consts.ContentTypeJson)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	cli := &http.Client{Timeout: 5 * 60 * time.Second}
+	log.Printf("Starting to DELETE request %s", reqURL)
+	resp, err := cli.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		log.Println("delete err", err)
+		panic("delete err")
+	}
+	res := resp.Body
+	resBody, err := ioutil.ReadAll(res)
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode == 404 {
+		log.Printf("Delete request %s, resp==%s", urlSuffix, resBody)
+		return true, string(resBody)
+	} else if resp.StatusCode > 204 {
+		log.Printf("Delete request %s failed, resp==%s", urlSuffix, resBody)
+		return false, string(resBody)
+	} else {
+		log.Printf("Delete request %s success", reqURL)
+		return true, ""
+	}
+}
+
+func (r *Request) Get(headers map[string]string, urlSuffix string) []byte {
+	reqURL := r.UrlPrefix + urlSuffix
+	req, err := http.NewRequest(consts.GET, reqURL, nil)
+	if err != nil {
+		log.Fatalln("new request error", err)
+	}
+	req.Header.Set("Content-Type", consts.ContentTypeJson)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	cli := &http.Client{Timeout: 5 * 60 * time.Second}
+	log.Printf("Starting to GET request %s", reqURL)
+	resp, err := cli.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		log.Println("get err", err)
+		panic("get err")
+	}
+	res := resp.Body
+	resBody, err := ioutil.ReadAll(res)
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode > 204 {
+		log.Printf("Get request %s failed, resp==%s", urlSuffix, resBody)
+		return nil
+	}
+	log.Printf("Get request %s success", reqURL)
+	return resBody
+}
+
+func (r *Request) List(headers map[string]string, urlSuffix string) []byte {
+	reqURL := r.UrlPrefix + urlSuffix
+	req, err := http.NewRequest(consts.GET, reqURL, nil)
+	if err != nil {
+		log.Fatalln("new request error", err)
+	}
+	req.Header.Set("Content-Type", consts.ContentTypeJson)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	cli := &http.Client{Timeout: 5 * 60 * time.Second}
+	log.Printf("Starting to LIST request %s", reqURL)
+	resp, err := cli.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		log.Println("list err", err)
+		panic("list err")
+	}
+	res := resp.Body
+	resBody, err := ioutil.ReadAll(res)
+	if err != nil {
+		panic(err)
+	}
+	if resp.StatusCode > 202 {
+		log.Printf("List request %s failed, resp==%s", reqURL, resBody)
+		return nil
+	}
+	log.Printf("List request %s sucess", reqURL)
+	return resBody
+}
 
